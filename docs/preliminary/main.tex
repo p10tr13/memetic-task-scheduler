@@ -1,0 +1,184 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[polish]{babel}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amssymb}
+\usepackage{enumitem}
+
+\newcommand{\coursename}{Wstęp do algorytmów ewolucyjnych}
+\newcommand{\projecttitle}{Harmonogramowanie zadań}
+\newcommand{\doctype}{Dokumentacja wstępna}
+\newcommand{\authorone}{Wojciech Jasiński}
+\newcommand{\authortwo}{Piotr Iśtok}
+\newcommand{\projectdate}{Warszawa, 23~kwietnia \the\year}
+
+\begin{document}
+\sloppy
+
+\begin{titlepage}
+    \centering
+
+    \includegraphics[width=0.8\textwidth]{politechnika.png}\par
+    \vspace{2.5cm}
+
+    {\Large \coursename\par}
+    \vspace{1.2cm}
+
+    {\Huge \bfseries \projecttitle \par}
+    \vspace{1cm}
+
+    {\Large \itshape \doctype \par}
+    \vspace{2cm}
+
+    {\Large Autorzy:\par}
+    \vspace{0.5cm}
+    {\large \authorone\par}
+    \vspace{0.3cm}
+    {\large \authortwo\par}
+
+    \vfill
+
+    {\large \projectdate\par}
+\end{titlepage}
+
+\section{Wprowadzenie i opis problemu}
+\textbf{Motywacja.} Celem niniejszego projektu jest opracowanie oraz implementacja algorytmu ewolucyjnego optymalizującego problem znany szerzej w jako harmonogramowanie zadań w środowisku wieloprocesorowym z ograniczeniem pierwszeństwa (\textit{ang. Task Scheduling Problem with Precedence Constraints}). Jako, że zadanie to należy do klasy problemów NP-Trudnych~\cite{ullman1975}, naturalnym jest wykorzystanie metaheurystyk w celu rozwiązania go.
+\par\medskip\noindent
+\textbf{Definicja formalna.} Problem zdefiniowany został jako czwórka $(T, p, l, M)$, gdzie:
+\begin{itemize}[itemsep=3pt, topsep=3pt]
+    \item $T = \{t_1, t_2, \dots, t_n\}$ jest zbiorem $n$ zadań do wykonania.
+    \item $p : T \times T \to \{0, 1\}$ koduje relację pierwszeństwa: $p(t_i, t_j) = 1$ oznacza, że zadanie $t_i$ musi zostać zakończone przed rozpoczęciem zadania $t_j$, a wartość $0$ - brak takiego więzu. Zakładamy, że graf skierowany indukowany przez~$p$ jest acykliczny (DAG); w~przeciwnym razie zbiór rozwiązań dopuszczalnych jest pusty.
+    \item $l: T \to \mathbb{N}$ jest funkcją przypisującą każdemu zadaniu czas jego trwania.
+    \item $M \in \mathbb{N}$ jest stałą liczbą grup pracowników, między które należy rozdzielić zadania. Grupa jest traktowana jako jedna jednostka, mogąca wykonać dowolne zadanie w jednym czasie nie łamiące relacji pierwszeństwa, dlatego będziemy się do niej odnosić jako procesor dla zgodności z literaturą i standardem.
+\end{itemize}
+\noindent
+\textbf{Funkcja celu i ograniczenia.} Głównym wyzwaniem projektowym jest dokonanie takiego podziału zadań między $M$ procesorów, aby zachować spójność logiczną procesu. Funkcją celu będzie minimalizacja czasu zakończenia wszystkich zadań, czyli tzw. \textit{makespan} ($C_{max}$). Optymalny harmonogram to taki, który przy pełnym wykorzystaniu dostępnych zasobów (grup) i zachowaniu wszystkich więzów technologicznych, kończy cały proces w najkrótszym możliwym czasie.
+
+\section{Proponowana metoda rozwiązania}
+\textbf{Ogólna koncepcja.} W celu rozwiązania wyżej przedstawionego problemu zastosowany zostanie algorytm memetyczny~\cite{moscato1989}. Będzie on łączył klasyczne, jak w przypadku podstawowych algorytmów genetycznych, globalne przeszukiwanie przestrzeni rozwiązań, wraz z optymalizacją lokalną. Podejście to powinno pozwolić zapobiec powstawanie wąskich gardeł w harmonogramach.
+\par\medskip\noindent
+\textbf{Reprezentacja osobnika.} W celu kodowania osobnika zastosowane zostanie kodowanie reprezentacji kolejności wykonanych zadań. Chromosomem będzie lista o długości $|T|$, zawierająca wszystkie zadania w kolejności takiej jakiej będą wykonywane. W tej reprezentacji nie ma bezpośredniego przydziału do grup, jednakże pokazuje ona tylko priorytet, z jakim będą te zadania umieszczane w harmonogramie.
+\par\medskip\noindent
+\textbf{Dekoder.} W celu zamieniania chromosomu na faktyczny harmonogram oraz wyliczania czasu jego trwania, stworzony zostanie zachłanny dekoder typu \textit{list scheduling}~\cite{graham1969}. Jako, że procesory są nierozróżnialne będzie on po kolei przydzielał wolnym jednostkom zadania. Dekoder będzie również sprawdzał potencjalne rozwiązania względem relacji $p$. Wyliczona przez dekoder wartość $C_{max}$ stanowiła będzie wartość funkcji przystosowania.
+\par\medskip\noindent
+\textbf{Operatory ewolucyjne.} Przechodząc do samego procesu ewolucji, zostały zaplanowane operatory selekcji, krzyżowania i mutacji. Zaczynając od selekcji, wykorzystana zostanie selekcja turniejowa~\cite{miller1995}, mająca na celu zapobiegnięcie dominacji jednego rozwiązania (osobnika). Następnie, z uwagi na charakterystykę permutacyjną reprezentacji zastosowane operatory mają na celu niwelować dublowanie się zadań w chromosomie. Głównym krzyżowaniem będzie krzyżowanie porządkowe (Order Crossover)~\cite{davis1985}, które będzie starało się zachowywać kolejność zadań i będzie w jakimś stopniu unikać łamania relacji $p$. Zbadane zostanie również krzyżowanie z częściowym mapowaniem (PMX)~\cite{goldberg1985}. Dla mutacji wykorzystany zostanie bardzo podstawowy operator mutacji, jakim jest operator zamiany. Polega on na losowej zamianie dwóch zadań ze sobą miejscami w chromosomie.
+\par\medskip\noindent
+\textbf{Optymalizacja lokalna (CPM).} Ostatnim kluczowym punktem proponowanego rozwiązania będzie moduł optymalizacji lokalnej. Po wygenerowaniu harmonogramu zostanie on poddany Analizie Ścieżki Krytycznej (\textit{ang. Critical Path Method})~\cite{kelley1959}. Analiza ta identyfikuje w harmonogramie wąskie gardła i na tej podstawie przesuwa, nadając niektórym większy priorytet i optymalizując harmonogram. Jeśli taka lokalna optymalizacja polepszy rozwiązanie, zgodnie z ewolucją Lamarckowską~\cite{whitley1994}, zastąpi ono poprzednika w populacji.
+
+\section{Planowane eksperymenty numeryczne}
+\textbf{Cel i hipotezy badawcze.} Celem eksperymentów jest ocena jakości rozwiązań zaproponowanego algorytmu oraz weryfikacja dwóch hipotez badawczych:
+\begin{itemize}[itemsep=1pt, topsep=2pt, leftmargin=3em]
+    \item[(H1)] lokalna optymalizacja CPM istotnie obniża medianę $C_{max}$ względem czystego AE;
+    \item[(H2)] krzyżowanie OX istotnie dominuje nad PMX na grafach rzadkich ($|E|/|T|^2 < 0{,}1$).
+\end{itemize}
+Podstawową miarą jakości jest $C_{max}$ przy ustalonym budżecie ewaluacji funkcji celu.
+\par\medskip\noindent
+\textbf{Zestawy testowe.} Jako instancje testowe posłużą grafy ze zbioru \textit{Standard Task Graph Set} (Kasahara Lab)~\cite{tobita2002} oraz grafy generowane syntetycznie z kontrolowaną liczbą zadań, gęstością i rozkładem czasów wykonania. Dla małych instancji ($|T| \leq 30$) wyznaczymy rozwiązanie optymalne za pomocą solvera MILP w celu raportowania luki optymalizacyjnej.
+\par\medskip\noindent
+\textbf{Baseline'y i ablacje.} Proponowane podejście zostanie zestawione z klasycznymi heurystykami listowymi HLFET~\cite{adam1974} oraz MCP (\textit{Modified Critical Path})~\cite{wu1990}, a także z czystym AE pozbawionym komponentu lokalnego. Zbadany zostanie również wpływ operatora krzyżowania (OX vs PMX), obecności CPM oraz głównych hiperparametrów (rozmiar populacji, $p_c$, $p_m$, rozmiar turnieju).
+\par\medskip\noindent
+\textbf{Analiza wyników.} Dla każdej konfiguracji wykonanych zostanie co najmniej 30 niezależnych uruchomień, a istotność różnic weryfikowana będzie testem Wilcoxona~\cite{wilcoxon1945}. Wyniki zaprezentowane zostaną w postaci tabel, wykresów pudełkowych $C_{max}$ oraz krzywych zbieżności. W celu zapewnienia powtarzalności eksperymentów ustalone zostaną ziarna generatora liczb losowych, a konfiguracja środowiska (wersje bibliotek, sprzęt) zostanie udokumentowana w repozytorium projektu.
+
+\section{Wybór technologii}
+Projekt zrealizujemy w języku Python (wersja 3.11), wykorzystując bibliotekę \textit{DEAP}~\cite{deap2012} jako szkielet algorytmu ewolucyjnego. Rozwiązania optymalne dla małych instancji wyznaczymy solverem MILP (CBC) z pakietu \textit{PuLP}~\cite{mitchell2011}. Pozostałe komponenty - operacje na DAG-ach, obliczenia numeryczne, wizualizację oraz analizę statystyczną - oprzemy o standardowe biblioteki naukowe: \textit{NetworkX}~\cite{hagberg2008}, \textit{NumPy}~\cite{harris2020}, \textit{Matplotlib}~\cite{hunter2007} oraz \textit{SciPy}~\cite{virtanen2020}.
+
+\begin{thebibliography}{99}
+
+\bibitem{moscato1989}
+P.~Moscato,
+\textit{On Evolution, Search, Optimization, Genetic Algorithms and Martial Arts: Towards Memetic Algorithms},
+Caltech Concurrent Computation Program, Report C3P 826, 1989.
+
+\bibitem{graham1969}
+R.~L. Graham,
+\textit{Bounds on multiprocessing timing anomalies},
+SIAM Journal on Applied Mathematics, vol.~17, no.~2, pp.~416--429, 1969.
+
+\bibitem{davis1985}
+L.~Davis,
+\textit{Applying adaptive algorithms to epistatic domains},
+w: Proc. of the 9th International Joint Conference on Artificial Intelligence (IJCAI), pp.~162--164, 1985.
+
+\bibitem{goldberg1985}
+D.~E. Goldberg, R.~Lingle,
+\textit{Alleles, loci, and the traveling salesman problem},
+w: Proc. of the 1st International Conference on Genetic Algorithms, pp.~154--159, 1985.
+
+\bibitem{kelley1959}
+J.~E. Kelley, M.~R. Walker,
+\textit{Critical-path planning and scheduling},
+w: Proc. of the Eastern Joint Computer Conference, pp.~160--173, 1959.
+
+\bibitem{tobita2002}
+T.~Tobita, H.~Kasahara,
+\textit{A standard task graph set for fair evaluation of multiprocessor scheduling algorithms},
+Journal of Scheduling, vol.~5, no.~5, pp.~379--394, 2002.
+\url{https://www.kasahara.cs.waseda.ac.jp/schedule/}
+
+\bibitem{adam1974}
+T.~L. Adam, K.~M. Chandy, J.~R. Dickson,
+\textit{A comparison of list schedules for parallel processing systems},
+Communications of the ACM, vol.~17, no.~12, pp.~685--690, 1974.
+
+\bibitem{wu1990}
+M.-Y. Wu, D.~D. Gajski,
+\textit{Hypertool: A programming aid for message-passing systems},
+IEEE Transactions on Parallel and Distributed Systems, vol.~1, no.~3, pp.~330--343, 1990.
+
+\bibitem{wilcoxon1945}
+F.~Wilcoxon,
+\textit{Individual comparisons by ranking methods},
+Biometrics Bulletin, vol.~1, no.~6, pp.~80--83, 1945.
+
+\bibitem{deap2012}
+F.-A. Fortin, F.-M. De~Rainville, M.-A. Gardner, M.~Parizeau, C.~Gagné,
+\textit{DEAP: Evolutionary algorithms made easy},
+Journal of Machine Learning Research, vol.~13, pp.~2171--2175, 2012.
+
+\bibitem{ullman1975}
+J.~D. Ullman,
+\textit{NP-complete scheduling problems},
+Journal of Computer and System Sciences, vol.~10, no.~3, pp.~384--393, 1975.
+
+\bibitem{miller1995}
+B.~L. Miller, D.~E. Goldberg,
+\textit{Genetic algorithms, tournament selection, and the effects of noise},
+Complex Systems, vol.~9, no.~3, pp.~193--212, 1995.
+
+\bibitem{whitley1994}
+D.~Whitley, V.~S. Gordon, K.~Mathias,
+\textit{Lamarckian evolution, the Baldwin effect and function optimization},
+w: Parallel Problem Solving from Nature (PPSN III), LNCS 866, Springer, pp.~6--15, 1994.
+
+\bibitem{hagberg2008}
+A.~A. Hagberg, D.~A. Schult, P.~J. Swart,
+\textit{Exploring network structure, dynamics, and function using NetworkX},
+w: Proc. of the 7th Python in Science Conference (SciPy), pp.~11--15, 2008.
+
+\bibitem{harris2020}
+C.~R. Harris \textit{et al.},
+\textit{Array programming with NumPy},
+Nature, vol.~585, no.~7825, pp.~357--362, 2020.
+
+\bibitem{hunter2007}
+J.~D. Hunter,
+\textit{Matplotlib: A 2D graphics environment},
+Computing in Science \& Engineering, vol.~9, no.~3, pp.~90--95, 2007.
+
+\bibitem{virtanen2020}
+P.~Virtanen \textit{et al.},
+\textit{SciPy 1.0: Fundamental algorithms for scientific computing in Python},
+Nature Methods, vol.~17, pp.~261--272, 2020.
+
+\bibitem{mitchell2011}
+S.~Mitchell, M.~O'Sullivan, I.~Dunning,
+\textit{PuLP: A linear programming toolkit for Python},
+Technical report, University of Auckland, 2011.
+\url{https://github.com/coin-or/pulp}
+
+\end{thebibliography}
+
+\end{document}
