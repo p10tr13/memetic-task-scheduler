@@ -219,3 +219,7 @@ __marimo__/
 
 # VS Code settings
 .vscode/
+
+# Problem Instances
+data/50/
+data/100/
