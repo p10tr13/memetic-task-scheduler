@@ -1,4 +1,5 @@
 ﻿black
+deap
 networkx
 numpy
 pylint
