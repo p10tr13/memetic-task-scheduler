@@ -6,7 +6,9 @@ from pathlib import Path
 from src.data.kasahara_parser import parse_stg_file
 from src.solvers.evolutionary.algorithm import run_evolution
 from src.solvers.evolutionary.config import EvolutionConfig, EvolutionStrategies
+from src.solvers.evolutionary.crossovers import pmx_crossover
 from src.solvers.evolutionary.local_search import cpm_local_search
+from src.solvers.evolutionary.strategies import swap_mutation, tournament_selection
 
 
 def main() -> None:
@@ -20,11 +22,14 @@ def main() -> None:
     evolution_config = EvolutionConfig(
         population_size=50,
         generations=100,
-        crossover_probability=0.0,
-        mutation_probability=0.2,
+        crossover_probability=0.8,
+        mutation_probability=0.3,
         random_seed=42,
     )
     evolution_strategies = EvolutionStrategies(
+        selection_strategy=tournament_selection,
+        mutation_strategy=swap_mutation,
+        crossover_strategy=pmx_crossover,
         local_search_strategy=lambda instance, permutation: cpm_local_search(
             instance,
             permutation,

@@ -20,6 +20,7 @@ from src.solvers.evolutionary.deap_setup import (
     ensure_deap_classes,
     evaluate_population,
 )
+from src.solvers.evolutionary.crossovers import ox_crossover, pmx_crossover
 from src.solvers.evolutionary.strategies import (
     evaluate_permutation_fitness,
     null_crossover,
@@ -35,6 +36,8 @@ __all__ = [
     "evaluate_permutation_fitness",
     "null_crossover",
     "null_local_search",
+    "ox_crossover",
+    "pmx_crossover",
     "run_evolution",
     "swap_mutation",
     "tournament_selection",
