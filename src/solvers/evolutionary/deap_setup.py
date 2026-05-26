@@ -113,7 +113,9 @@ def _create_individual(
     """
     permutation: list[int] = []
 
-    for generation in nx.topological_generations(problem_instance.priority_relationship):
+    for generation in nx.topological_generations(
+        problem_instance.priority_relationship
+    ):
         generation_tasks = sorted(task for task in generation if task in task_numbers)
         random.shuffle(generation_tasks)
         permutation.extend(generation_tasks)
