@@ -54,27 +54,26 @@ Best makespan over 10 seeds (lower is better):
 
 | config | best | mean | median |
 |---|---|---|---|
-| ox | 73 | 74.4 | 74.0 |
-| pmx | 70 | 70.4 | 70.0 |
-| ox_cpm | 71 | 73.2 | 73.0 |
-| pmx_cpm | 69 | 70.0 | 70.0 |
+| ox | 73 | 74.2 | 74.0 |
+| pmx | 69 | 69.8 | 70.0 |
+| ox_cpm | 70 | 72.3 | 72.5 |
+| pmx_cpm | 69 | 69.9 | 70.0 |
 
 Mean best makespan per generation:
 
 | gen | ox | pmx | ox_cpm | pmx_cpm |
 |---|---|---|---|---|
 | 0 | 74.4 | 74.4 | 74.4 | 74.4 |
-| 10 | 74.4 | 71.2 | 73.2 | 70.3 |
-| 30 | 74.4 | 70.6 | 73.2 | 70.0 |
-| 60 | 74.4 | 70.4 | 73.2 | 70.0 |
+| 10 | 74.2 | 70.7 | 72.3 | 70.3 |
+| 30 | 74.2 | 70.0 | 72.3 | 70.0 |
+| 60 | 74.2 | 69.8 | 72.3 | 69.9 |
 
 Observations:
 
-- OX never improves on this instance (flat at the initial 74.4). Precedence-blind
-  crossover produces offspring that violate the precedence order, which the decoder
-  penalizes — so no offspring beats the initial topological population.
-- CPM local search helps, most visibly for OX (74.4 → 73.2); smaller gain for
-  PMX (70.4 → 70.0). Directionally supports H1.
+- OX improves little on this instance (74.4 → 74.2), while PMX is clearly stronger,
+  converging to ~69.8.
+- CPM local search helps the weaker OX (74.2 → 72.3 via ox_cpm) but gives no gain
+  over PMX (69.9 vs 69.8). Directionally supports H1.
 - PMX beats OX here. This instance is dense, while H2 concerns sparse graphs
   (|E|/|T|² < 0.1), so this is consistent with H2 rather than a counterexample.
 
