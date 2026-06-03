@@ -14,10 +14,10 @@ from src.solvers.evolutionary.strategies import swap_mutation, tournament_select
 def main() -> None:
     """Runs the evolutionary scheduler on a bundled sample instance."""
     repository_root = Path(__file__).resolve().parents[1]
-    instance_path = repository_root / "data" / "50" / "rand0000.stg"
+    instance_path = repository_root / "data" / "sample" / "example.stg"
     problem_instance = replace(
         parse_stg_file(instance_path),
-        number_of_groups=4,
+        number_of_groups=3,
     )
     evolution_config = EvolutionConfig(
         population_size=50,

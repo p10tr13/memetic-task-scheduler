@@ -223,3 +223,6 @@ __marimo__/
 # Problem Instances
 data/50/
 data/100/
+
+# Experiment outputs
+results/
