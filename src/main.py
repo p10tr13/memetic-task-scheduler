@@ -1,4 +1,4 @@
-"""App entry point."""
+﻿"""App entry point."""
 
 from dataclasses import replace
 from pathlib import Path
@@ -9,6 +9,7 @@ from src.solvers.evolutionary.config import EvolutionConfig, EvolutionStrategies
 from src.solvers.evolutionary.crossovers import pmx_crossover
 from src.solvers.evolutionary.local_search import cpm_local_search
 from src.solvers.evolutionary.strategies import swap_mutation, tournament_selection
+from src.solvers.heuristics import solve_hlfet
 
 
 def main() -> None:
@@ -37,7 +38,8 @@ def main() -> None:
         ),
     )
 
-    result = run_evolution(
+    hlfet_result = solve_hlfet(problem_instance)
+    evolution_result = run_evolution(
         problem_instance=problem_instance,
         config=evolution_config,
         strategies=evolution_strategies,
@@ -45,8 +47,10 @@ def main() -> None:
 
     print(f"Instance: {instance_path}")
     print(f"Processors: {problem_instance.number_of_groups}")
-    print(f"Best makespan: {result.best_makespan}")
-    print(f"Best permutation: {result.best_permutation}")
+    print(f"HLFET makespan: {hlfet_result.makespan}")
+    print(f"HLFET permutation: {hlfet_result.task_permutation}")
+    print(f"Memetic makespan: {evolution_result.best_makespan}")
+    print(f"Memetic permutation: {evolution_result.best_permutation}")
 
 
 if __name__ == "__main__":
