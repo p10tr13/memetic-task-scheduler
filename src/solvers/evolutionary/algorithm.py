@@ -1,5 +1,6 @@
 """DEAP-based evolutionary algorithm for task scheduling."""
 
+import heapq
 import random
 
 from deap import tools
@@ -88,6 +89,7 @@ def run_evolution(
 
         _apply_crossover(offspring, selected_crossover, config.crossover_probability)
         _apply_mutation(offspring, selected_mutation, config.mutation_probability)
+        _apply_repair(offspring, problem_instance)
         _apply_local_search(offspring, selected_local_search, problem_instance)
         evaluate_population(offspring, toolbox)
 
@@ -168,6 +170,76 @@ def _apply_mutation(
             continue
         mutation_strategy(individual)
         del individual.fitness.values
+
+
+def _apply_repair(
+    offspring: list[Individual],
+    problem_instance: ProblemInstance,
+) -> None:
+    """Repairs offspring into precedence-valid orders, preserving priority.
+
+    Permutation operators can break the topological order the decoder requires,
+    which otherwise leaves the individual stuck at the invalid-makespan penalty.
+    Each offspring is rebuilt into a valid order that follows its gene order as a
+    priority list, so feasible schedules are evolved instead of penalized.
+
+    Args:
+        offspring: Offspring population to repair in place.
+        problem_instance: Scheduling problem instance.
+    """
+    graph_task_numbers = set(problem_instance.priority_relationship.nodes)
+
+    for individual in offspring:
+        if len(individual) != len(graph_task_numbers) or (
+            set(individual) != graph_task_numbers
+        ):
+            continue
+        repaired_permutation = _repair_to_topological(individual, problem_instance)
+        if list(individual) == repaired_permutation:
+            continue
+        individual[:] = repaired_permutation
+        if individual.fitness.valid:
+            del individual.fitness.values
+
+
+def _repair_to_topological(
+    task_permutation: list[int],
+    problem_instance: ProblemInstance,
+) -> list[int]:
+    """Builds a precedence-valid order using the permutation as task priority.
+
+    Args:
+        task_permutation: Possibly precedence-invalid task order.
+        problem_instance: Scheduling problem instance.
+
+    Returns:
+        Topological order that schedules a ready task with the lowest gene index
+        first, matching the priority encoded by the permutation.
+    """
+    graph = problem_instance.priority_relationship
+    priority = {
+        task_number: index for index, task_number in enumerate(task_permutation)
+    }
+    remaining_predecessors = {node: graph.in_degree(node) for node in graph.nodes}
+    ready_tasks = [
+        (priority[node], node)
+        for node, predecessor_count in remaining_predecessors.items()
+        if predecessor_count == 0
+    ]
+    heapq.heapify(ready_tasks)
+
+    repaired_permutation: list[int] = []
+    while ready_tasks:
+        _, task_number = heapq.heappop(ready_tasks)
+        repaired_permutation.append(task_number)
+        for successor_number in graph.successors(task_number):
+            remaining_predecessors[successor_number] -= 1
+            if remaining_predecessors[successor_number] == 0:
+                heapq.heappush(
+                    ready_tasks, (priority[successor_number], successor_number)
+                )
+
+    return repaired_permutation
 
 
 def _apply_local_search(
