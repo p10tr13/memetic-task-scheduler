@@ -9,7 +9,7 @@ from src.solvers.evolutionary.config import EvolutionConfig, EvolutionStrategies
 from src.solvers.evolutionary.crossovers import pmx_crossover
 from src.solvers.evolutionary.local_search import cpm_local_search
 from src.solvers.evolutionary.strategies import swap_mutation, tournament_selection
-from src.solvers.heuristics import solve_hlfet
+from src.solvers.heuristics import solve_hlfet, solve_mcp
 
 
 def main() -> None:
@@ -39,6 +39,7 @@ def main() -> None:
     )
 
     hlfet_result = solve_hlfet(problem_instance)
+    mcp_result = solve_mcp(problem_instance)
     evolution_result = run_evolution(
         problem_instance=problem_instance,
         config=evolution_config,
@@ -49,6 +50,8 @@ def main() -> None:
     print(f"Processors: {problem_instance.number_of_groups}")
     print(f"HLFET makespan: {hlfet_result.makespan}")
     print(f"HLFET permutation: {hlfet_result.task_permutation}")
+    print(f"MCP makespan: {mcp_result.makespan}")
+    print(f"MCP permutation: {mcp_result.task_permutation}")
     print(f"Memetic makespan: {evolution_result.best_makespan}")
     print(f"Memetic permutation: {evolution_result.best_permutation}")
 
