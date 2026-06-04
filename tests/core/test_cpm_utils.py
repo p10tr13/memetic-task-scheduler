@@ -55,6 +55,20 @@ def test_identify_critical_tasks_includes_resource_predecessor() -> None:
     assert critical_tasks == {0, 2}
 
 
+def test_identify_critical_tasks_includes_tied_binding_predecessors() -> None:
+    graph = nx.DiGraph()
+    graph.add_edges_from([(0, 2), (1, 2)])
+    problem_instance = ProblemInstance(
+        number_of_groups=2,
+        priority_relationship=graph,
+        task_times=np.array([5, 5, 1]),
+    )
+
+    critical_tasks = identify_critical_tasks([0, 1, 2], problem_instance)
+
+    assert critical_tasks == {0, 1, 2}
+
+
 def test_identify_critical_tasks_rejects_cycle() -> None:
     graph = nx.DiGraph()
     graph.add_edges_from([(0, 1), (1, 0)])

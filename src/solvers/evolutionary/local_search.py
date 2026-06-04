@@ -149,8 +149,18 @@ def _movable_critical_tasks(
     Returns:
         Sorted critical task numbers worth moving (zero-duration tasks excluded).
     """
-    return sorted(
-        task_id
-        for task_id in identify_critical_tasks(task_permutation, problem_instance)
-        if int(problem_instance.task_times[task_id]) > 0
-    )
+    movable_tasks = []
+    task_indices = {
+        task_number: task_index for task_index, task_number in enumerate(task_permutation)
+    }
+
+    for task_id in identify_critical_tasks(task_permutation, problem_instance):
+        if int(problem_instance.task_times[task_id]) <= 0:
+            continue
+
+        current_index = task_indices[task_id]
+        left_boundary = get_left_boundary(problem_instance, task_permutation, task_id)
+        if left_boundary < current_index - 1:
+            movable_tasks.append(task_id)
+
+    return sorted(movable_tasks)

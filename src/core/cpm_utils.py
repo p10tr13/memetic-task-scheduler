@@ -47,21 +47,20 @@ def identify_critical_tasks(
         if task_number in critical_tasks:
             continue
         critical_tasks.add(task_number)
-        binding_predecessor = _binding_predecessor(
+        binding_predecessors = _binding_predecessors(
             problem_instance, schedule, task_number
         )
-        if binding_predecessor is not None:
-            pending.append(binding_predecessor)
+        pending.extend(binding_predecessors)
 
     return critical_tasks
 
 
-def _binding_predecessor(
+def _binding_predecessors(
     problem_instance: ProblemInstance,
     schedule: Schedule,
     task_number: int,
-) -> int | None:
-    """Finds the predecessor whose finish time forces a task's start.
+) -> list[int]:
+    """Finds predecessors whose finish time forces a task's start.
 
     Args:
         problem_instance: Scheduling problem instance.
@@ -69,24 +68,26 @@ def _binding_predecessor(
         task_number: Task whose binding predecessor is sought.
 
     Returns:
-        Precedence or same-processor predecessor finishing exactly when the task
-        starts, or None if the task starts at time zero or nothing binds it.
+        Precedence and/or same-processor predecessors finishing exactly when the
+        task starts, or an empty list if the task starts at time zero or nothing
+        binds it.
     """
     start_time = schedule.start_times[task_number]
     if start_time == 0:
-        return None
+        return []
 
+    binding_predecessors = []
     for predecessor_number in problem_instance.priority_relationship.predecessors(
         task_number
     ):
         if schedule.finish_times[predecessor_number] == start_time:
-            return predecessor_number
+            binding_predecessors.append(predecessor_number)
 
     machine_predecessor = schedule.machine_predecessors[task_number]
     if (
         machine_predecessor is not None
         and schedule.finish_times[machine_predecessor] == start_time
     ):
-        return machine_predecessor
+        binding_predecessors.append(machine_predecessor)
 
-    return None
+    return binding_predecessors

@@ -78,6 +78,32 @@ def test_cpm_local_search_returns_original_when_max_attempts_is_zero() -> None:
     assert final_permutation is not initial_permutation
 
 
+def test_cpm_local_search_ignores_immovable_critical_tasks(monkeypatch) -> None:
+    graph = nx.DiGraph()
+    graph.add_edge(0, 2)
+    graph.add_node(1)
+    problem_instance = ProblemInstance(
+        number_of_groups=2,
+        priority_relationship=graph,
+        task_times=np.array([5, 1, 5]),
+    )
+
+    def choose_only_movable_task(candidates: list[int]) -> int:
+        assert candidates == [2]
+        return 2
+
+    monkeypatch.setattr(local_search.random, "choice", choose_only_movable_task)
+    monkeypatch.setattr(local_search.random, "randint", lambda _start, _end: 1)
+
+    improved_permutation = local_search.cpm_local_search(
+        problem_instance,
+        [0, 1, 2],
+        max_attempts=1,
+    )
+
+    assert improved_permutation == [0, 2, 1]
+
+
 def test_cpm_local_search_raises_decoder_error_for_invalid_permutation() -> None:
     problem_instance = _create_local_search_instance()
 
