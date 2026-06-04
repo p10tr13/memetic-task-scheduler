@@ -86,7 +86,10 @@ def cpm_local_search(
     task_permutation: Sequence[int],
     max_attempts: int,
 ) -> list[int]:
-    """Improves a permutation by pulling critical tasks left.
+    """Improves a permutation by pulling schedule-critical tasks left.
+
+    Critical tasks are recomputed from the current schedule on every attempt, so
+    the search follows the bottlenecks of the evolving schedule.
 
     Args:
         problem_instance: Scheduling problem instance.
@@ -98,12 +101,15 @@ def cpm_local_search(
     """
     current_permutation = list(task_permutation)
     current_cmax = calculate_makespan(current_permutation, problem_instance)
-    critical_tasks = tuple(sorted(identify_critical_tasks(problem_instance)))
 
-    if max_attempts <= 0 or not critical_tasks:
+    if max_attempts <= 0:
         return current_permutation
 
     for _ in range(max_attempts):
+        critical_tasks = _movable_critical_tasks(problem_instance, current_permutation)
+        if not critical_tasks:
+            break
+
         task_id = random.choice(critical_tasks)
         current_index = current_permutation.index(task_id)
         left_boundary = get_left_boundary(
@@ -128,3 +134,34 @@ def cpm_local_search(
             current_cmax = new_cmax
 
     return current_permutation
+
+
+def _movable_critical_tasks(
+    problem_instance: ProblemInstance,
+    task_permutation: Sequence[int],
+) -> list[int]:
+    """Returns non-zero-duration critical tasks of the current schedule.
+
+    Args:
+        problem_instance: Scheduling problem instance.
+        task_permutation: Current task order.
+
+    Returns:
+        Sorted critical task numbers worth moving (zero-duration tasks excluded).
+    """
+    movable_tasks = []
+    task_indices = {
+        task_number: task_index
+        for task_index, task_number in enumerate(task_permutation)
+    }
+
+    for task_id in identify_critical_tasks(task_permutation, problem_instance):
+        if int(problem_instance.task_times[task_id]) <= 0:
+            continue
+
+        current_index = task_indices[task_id]
+        left_boundary = get_left_boundary(problem_instance, task_permutation, task_id)
+        if left_boundary < current_index - 1:
+            movable_tasks.append(task_id)
+
+    return sorted(movable_tasks)

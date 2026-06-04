@@ -2,10 +2,27 @@
 
 import heapq
 from collections.abc import Sequence
-
-import numpy as np
+from dataclasses import dataclass
 
 from src.core.models import ProblemInstance
+
+
+@dataclass(frozen=True)
+class Schedule:
+    """Stores the schedule produced by decoding a task permutation.
+
+    Args:
+        start_times: Start time per task number on its processor.
+        finish_times: Finish time per task number.
+        machine_predecessors: Task that previously occupied the same processor,
+            or None if the task was the first one on its processor.
+        makespan: Latest finish time across all tasks.
+    """
+
+    start_times: dict[int, int]
+    finish_times: dict[int, int]
+    machine_predecessors: dict[int, int | None]
+    makespan: int
 
 
 def calculate_makespan(
@@ -24,44 +41,102 @@ def calculate_makespan(
     Raises:
         ValueError: If the processor count, task times, or permutation is invalid.
     """
+    return compute_schedule(task_permutation, problem_instance).makespan
+
+
+def compute_schedule(
+    task_permutation: Sequence[int],
+    problem_instance: ProblemInstance,
+) -> Schedule:
+    """Decodes a precedence-valid task permutation into a concrete schedule.
+
+    Each task is placed on the processor that frees earliest, no earlier than all
+    its predecessors finish, matching the list-scheduling decoder.
+
+    Args:
+        task_permutation: Task numbers in the order used by list scheduling.
+        problem_instance: Scheduling problem with processor count, graph, and times.
+
+    Returns:
+        Start times, finish times, per-processor predecessors, and the makespan.
+
+    Raises:
+        ValueError: If the processor count, task times, or permutation is invalid.
+    """
     processor_count = _validate_processor_count(problem_instance)
     graph_task_numbers = set(problem_instance.priority_relationship.nodes)
 
     _validate_task_permutation(task_permutation, graph_task_numbers)
     _validate_task_time_indexes(problem_instance, graph_task_numbers)
 
-    processor_available_times = [0] * processor_count
-    heapq.heapify(processor_available_times)
-    task_finish_times = np.zeros(len(problem_instance.task_times), dtype=int)
-    scheduled_task_numbers: set[int] = set()
+    processor_heap = [(0, processor_id) for processor_id in range(processor_count)]
+    heapq.heapify(processor_heap)
+    last_task_on_processor: dict[int, int | None] = {
+        processor_id: None for processor_id in range(processor_count)
+    }
+    start_times: dict[int, int] = {}
+    finish_times: dict[int, int] = {}
+    machine_predecessors: dict[int, int | None] = {}
 
     for task_number in task_permutation:
-        predecessor_finish_time = 0
+        predecessor_finish_time = _predecessor_finish_time(
+            problem_instance, finish_times, task_number
+        )
 
-        for predecessor_number in problem_instance.priority_relationship.predecessors(
-            task_number
-        ):
-            if predecessor_number not in scheduled_task_numbers:
-                raise ValueError(
-                    f"Task {task_number} is scheduled before predecessor "
-                    f"{predecessor_number}."
-                )
-            predecessor_finish_time = max(
-                predecessor_finish_time,
-                int(task_finish_times[predecessor_number]),
-            )
-
-        processor_available_time = heapq.heappop(processor_available_times)
+        processor_available_time, processor_id = heapq.heappop(processor_heap)
         task_start_time = max(processor_available_time, predecessor_finish_time)
         task_finish_time = task_start_time + int(
             problem_instance.task_times[task_number]
         )
 
-        task_finish_times[task_number] = task_finish_time
-        scheduled_task_numbers.add(task_number)
-        heapq.heappush(processor_available_times, task_finish_time)
+        start_times[task_number] = task_start_time
+        finish_times[task_number] = task_finish_time
+        machine_predecessors[task_number] = last_task_on_processor[processor_id]
+        last_task_on_processor[processor_id] = task_number
+        heapq.heappush(processor_heap, (task_finish_time, processor_id))
 
-    return int(task_finish_times.max()) if task_finish_times.size else 0
+    return Schedule(
+        start_times=start_times,
+        finish_times=finish_times,
+        machine_predecessors=machine_predecessors,
+        makespan=max(finish_times.values(), default=0),
+    )
+
+
+def _predecessor_finish_time(
+    problem_instance: ProblemInstance,
+    finish_times: dict[int, int],
+    task_number: int,
+) -> int:
+    """Returns the latest finish time among a task's scheduled predecessors.
+
+    Args:
+        problem_instance: Scheduling problem instance.
+        finish_times: Finish times of already-scheduled tasks.
+        task_number: Task whose predecessors are inspected.
+
+    Returns:
+        Latest predecessor finish time, or 0 if the task has no predecessors.
+
+    Raises:
+        ValueError: If a predecessor has not been scheduled yet.
+    """
+    predecessor_finish_time = 0
+
+    for predecessor_number in problem_instance.priority_relationship.predecessors(
+        task_number
+    ):
+        if predecessor_number not in finish_times:
+            raise ValueError(
+                f"Task {task_number} is scheduled before predecessor "
+                f"{predecessor_number}."
+            )
+        predecessor_finish_time = max(
+            predecessor_finish_time,
+            finish_times[predecessor_number],
+        )
+
+    return predecessor_finish_time
 
 
 def _validate_processor_count(problem_instance: ProblemInstance) -> int:

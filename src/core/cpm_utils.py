@@ -1,88 +1,93 @@
 """Critical Path Method utilities for task graphs."""
 
+from collections.abc import Sequence
+
 import networkx as nx
 
+from src.core.decoder import Schedule, compute_schedule
 from src.core.models import ProblemInstance
 
 
-def identify_critical_tasks(problem_instance: ProblemInstance) -> set[int]:
-    """Identifies tasks with zero slack in the precedence graph.
+def identify_critical_tasks(
+    task_permutation: Sequence[int],
+    problem_instance: ProblemInstance,
+) -> set[int]:
+    """Identifies tasks on the critical path of the decoded schedule.
+
+    The permutation is decoded into a concrete schedule, then the critical chain
+    is traced back from the tasks finishing at the makespan, following at each
+    step the predecessor whose finish forces the task's start. That predecessor
+    may be a precedence predecessor or the previous task on the same processor (a
+    resource bottleneck), so the result reflects schedule bottlenecks rather than
+    the static graph critical path.
 
     Args:
-        problem_instance: Scheduling problem with a precedence graph and task times.
+        task_permutation: Task order to decode and analyse.
+        problem_instance: Scheduling problem with a precedence graph and times.
 
     Returns:
-        Task numbers with zero slack.
+        Task numbers lying on a critical path of the decoded schedule.
 
     Raises:
-        ValueError: If the graph is cyclic or task times do not cover graph tasks.
+        ValueError: If the graph is cyclic, or the permutation/times are invalid.
     """
-    priority_relationship = problem_instance.priority_relationship
-
-    if not nx.is_directed_acyclic_graph(priority_relationship):
+    if not nx.is_directed_acyclic_graph(problem_instance.priority_relationship):
         raise ValueError("CPM requires a directed acyclic graph.")
 
-    task_numbers = list(nx.topological_sort(priority_relationship))
-    _validate_task_time_indexes(problem_instance, set(task_numbers))
-
-    early_start_times: dict[int, int] = {}
-    early_finish_times: dict[int, int] = {}
-
-    for task_number in task_numbers:
-        early_start_times[task_number] = max(
-            (
-                early_finish_times[predecessor_number]
-                for predecessor_number in priority_relationship.predecessors(
-                    task_number
-                )
-            ),
-            default=0,
-        )
-        early_finish_times[task_number] = early_start_times[task_number] + int(
-            problem_instance.task_times[task_number]
-        )
-
-    project_duration = max(early_finish_times.values(), default=0)
-    late_start_times: dict[int, int] = {}
-    late_finish_times: dict[int, int] = {}
-
-    for task_number in reversed(task_numbers):
-        late_finish_times[task_number] = min(
-            (
-                late_start_times[successor_number]
-                for successor_number in priority_relationship.successors(task_number)
-            ),
-            default=project_duration,
-        )
-        late_start_times[task_number] = late_finish_times[task_number] - int(
-            problem_instance.task_times[task_number]
-        )
-
-    return {
+    schedule = compute_schedule(task_permutation, problem_instance)
+    critical_tasks: set[int] = set()
+    pending = [
         task_number
-        for task_number in task_numbers
-        if late_start_times[task_number] - early_start_times[task_number] == 0
-    }
+        for task_number, finish_time in schedule.finish_times.items()
+        if finish_time == schedule.makespan
+    ]
+
+    while pending:
+        task_number = pending.pop()
+        if task_number in critical_tasks:
+            continue
+        critical_tasks.add(task_number)
+        binding_predecessors = _binding_predecessors(
+            problem_instance, schedule, task_number
+        )
+        pending.extend(binding_predecessors)
+
+    return critical_tasks
 
 
-def _validate_task_time_indexes(
+def _binding_predecessors(
     problem_instance: ProblemInstance,
-    graph_task_numbers: set[int],
-) -> None:
-    """Validates that graph task numbers can index the task time array.
+    schedule: Schedule,
+    task_number: int,
+) -> list[int]:
+    """Finds predecessors whose finish time forces a task's start.
 
     Args:
         problem_instance: Scheduling problem instance.
-        graph_task_numbers: Task numbers from the precedence graph.
+        schedule: Decoded schedule.
+        task_number: Task whose binding predecessor is sought.
 
-    Raises:
-        ValueError: If task numbers cannot index the task time array.
+    Returns:
+        Precedence and/or same-processor predecessors finishing exactly when the
+        task starts, or an empty list if the task starts at time zero or nothing
+        binds it.
     """
-    if not graph_task_numbers:
-        return
+    start_time = schedule.start_times[task_number]
+    if start_time == 0:
+        return []
 
-    if any(
-        task_number < 0 or task_number >= len(problem_instance.task_times)
-        for task_number in graph_task_numbers
+    binding_predecessors = []
+    for predecessor_number in problem_instance.priority_relationship.predecessors(
+        task_number
     ):
-        raise ValueError("Task times must contain an entry for every graph task.")
+        if schedule.finish_times[predecessor_number] == start_time:
+            binding_predecessors.append(predecessor_number)
+
+    machine_predecessor = schedule.machine_predecessors[task_number]
+    if (
+        machine_predecessor is not None
+        and schedule.finish_times[machine_predecessor] == start_time
+    ):
+        binding_predecessors.append(machine_predecessor)
+
+    return binding_predecessors
