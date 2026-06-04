@@ -28,6 +28,14 @@ python -m src.experiments.plots             # writes results/campaign/plots/*.pn
 > **generations**, not at an equal evaluation budget. The CPM advantage below is
 > therefore partly a larger effective search effort per generation.
 
+**Runtime.** The full campaign (`run_experiments`) takes **~39 min** wall-clock,
+single-threaded, on an Apple M4 (10 cores, 16 GB, macOS 26.5, Python 3.11) — the
+runner does not parallelise across seeds. The two largest Kasahara instances
+(`robot_control`, `random_300`) with the CPM configurations dominate the time, since
+the schedule-aware local search re-decodes the schedule on every attempt. The
+synthetic + mid-size instances together finish in a few minutes; `analyze` and
+`plots` run in seconds. Use `--quick` for a few-second smoke test.
+
 ## Instances
 
 | instance | source | nodes (+2 dummy) | edges | density `\|E\|/\|T\|²` | M | HLFET | MCP | MILP opt | LB |
