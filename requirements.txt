@@ -2,5 +2,6 @@
 deap
 networkx
 numpy
+pulp
 pylint
 pytest

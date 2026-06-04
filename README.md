@@ -8,15 +8,17 @@ task scheduling with precedence constraints, minimizing makespan (C_max).
 - `src/core/` — domain model, list-scheduling decoder, critical-path (CPM) analysis
 - `src/data/` — parser for Kasahara STG instance files
 - `src/solvers/evolutionary/` — DEAP-based EA: crossovers (OX, PMX), strategies, CPM local search
-- `src/main.py` — runs the scheduler on the bundled sample instance
+- `src/solvers/heuristics.py` — HLFET and MCP list-scheduling baselines
+- `src/solvers/milp.py` — exact time-indexed MILP (CBC via PuLP) for small instances, used to report optimality gaps
+- `src/main.py` — runs HLFET, MCP, the memetic EA, and the MILP on a small bundled instance and prints each optimality gap
 - `src/experiments/run_partial.py` — OX-vs-PMX and CPM-on/off comparison runner
-- `data/sample/` — small example STG instance for local runs
+- `data/sample/` — bundled STG instances for local runs (incl. `small.stg`, small enough to solve to optimality)
 - `tests/` — unit tests
 - `docs/preliminary/` — preliminary documentation
 
 ## Setup
 
-Requires Python 3.11+.
+Requires Python 3.10+ (uses PEP 604 `X | None` type unions).
 
 ```
 python -m venv .venv
@@ -26,7 +28,8 @@ pip install -r requirements.txt
 
 ## Usage
 
-Run on the bundled sample instance:
+Run HLFET, MCP, the memetic EA, and the exact MILP on the small bundled instance
+and print each makespan with its gap to the MILP optimum:
 
 ```
 python -m src.main
