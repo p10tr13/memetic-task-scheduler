@@ -1,4 +1,4 @@
-﻿"""App entry point."""
+"""App entry point."""
 
 from dataclasses import replace
 from pathlib import Path
@@ -10,15 +10,36 @@ from src.solvers.evolutionary.crossovers import pmx_crossover
 from src.solvers.evolutionary.local_search import cpm_local_search
 from src.solvers.evolutionary.strategies import swap_mutation, tournament_selection
 from src.solvers.heuristics import solve_hlfet, solve_mcp
+from src.solvers.milp import solve_milp
+
+
+def _optimality_gap(makespan: int, optimal_makespan: int | None) -> str:
+    """Formats the optimality gap of a makespan against the MILP optimum.
+
+    Args:
+        makespan: Makespan produced by a solver.
+        optimal_makespan: Proven optimal makespan, or None if unavailable.
+
+    Returns:
+        Percentage gap text, or "n/a" if the optimum is unknown.
+    """
+    if not optimal_makespan:
+        return "n/a"
+
+    return f"{(makespan - optimal_makespan) / optimal_makespan:.1%}"
 
 
 def main() -> None:
-    """Runs the evolutionary scheduler on a bundled sample instance."""
+    """Runs the heuristics, the memetic EA, and the exact MILP on a small instance.
+
+    The instance is small enough for the MILP to prove optimality, so the heuristic
+    and EA makespans are reported alongside their gap to the optimum.
+    """
     repository_root = Path(__file__).resolve().parents[1]
-    instance_path = repository_root / "data" / "sample" / "example.stg"
+    instance_path = repository_root / "data" / "sample" / "small.stg"
     problem_instance = replace(
         parse_stg_file(instance_path),
-        number_of_groups=3,
+        number_of_groups=2,
     )
     evolution_config = EvolutionConfig(
         population_size=50,
@@ -45,15 +66,28 @@ def main() -> None:
         config=evolution_config,
         strategies=evolution_strategies,
     )
+    milp_result = solve_milp(problem_instance, time_limit_seconds=60)
+    optimal_makespan = milp_result.makespan
 
     print(f"Instance: {instance_path}")
     print(f"Processors: {problem_instance.number_of_groups}")
-    print(f"HLFET makespan: {hlfet_result.makespan}")
-    print(f"HLFET permutation: {hlfet_result.task_permutation}")
-    print(f"MCP makespan: {mcp_result.makespan}")
-    print(f"MCP permutation: {mcp_result.task_permutation}")
-    print(f"Memetic makespan: {evolution_result.best_makespan}")
-    print(f"Memetic permutation: {evolution_result.best_permutation}")
+    print(
+        f"MILP optimum: {optimal_makespan} "
+        f"(status: {milp_result.status}, proven optimal: {milp_result.is_optimal})"
+    )
+    print(f"{'solver':<10}{'makespan':>10}{'gap':>8}")
+    print(
+        f"{'HLFET':<10}{hlfet_result.makespan:>10}"
+        f"{_optimality_gap(hlfet_result.makespan, optimal_makespan):>8}"
+    )
+    print(
+        f"{'MCP':<10}{mcp_result.makespan:>10}"
+        f"{_optimality_gap(mcp_result.makespan, optimal_makespan):>8}"
+    )
+    print(
+        f"{'Memetic':<10}{evolution_result.best_makespan:>10}"
+        f"{_optimality_gap(evolution_result.best_makespan, optimal_makespan):>8}"
+    )
 
 
 if __name__ == "__main__":
