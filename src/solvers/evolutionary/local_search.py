@@ -151,7 +151,8 @@ def _movable_critical_tasks(
     """
     movable_tasks = []
     task_indices = {
-        task_number: task_index for task_index, task_number in enumerate(task_permutation)
+        task_number: task_index
+        for task_index, task_number in enumerate(task_permutation)
     }
 
     for task_id in identify_critical_tasks(task_permutation, problem_instance):
