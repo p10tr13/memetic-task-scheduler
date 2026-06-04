@@ -4,7 +4,7 @@ import networkx as nx
 import numpy as np
 import pytest
 
-from src.core.decoder import calculate_makespan
+from src.core.decoder import calculate_makespan, compute_schedule
 from src.core.models import ProblemInstance
 
 
@@ -83,6 +83,32 @@ def test_calculate_makespan_rejects_missing_task_time() -> None:
 
     with pytest.raises(ValueError, match="Task times"):
         calculate_makespan([0, 1, 2], problem_instance)
+
+
+def test_compute_schedule_returns_start_and_finish_times() -> None:
+    problem_instance = _create_problem_instance(number_of_groups=2)
+
+    schedule = compute_schedule([0, 1, 2, 3], problem_instance)
+
+    assert schedule.makespan == 4
+    assert schedule.start_times == {0: 0, 1: 0, 2: 0, 3: 4}
+    assert schedule.finish_times == {0: 0, 1: 4, 2: 3, 3: 4}
+    assert schedule.machine_predecessors == {0: None, 1: 0, 2: None, 3: 2}
+
+
+def test_compute_schedule_records_processor_reuse() -> None:
+    graph = nx.DiGraph()
+    graph.add_nodes_from([0, 1, 2])
+    problem_instance = ProblemInstance(
+        number_of_groups=2,
+        priority_relationship=graph,
+        task_times=np.array([5, 5, 5]),
+    )
+
+    schedule = compute_schedule([0, 1, 2], problem_instance)
+
+    assert schedule.makespan == 10
+    assert schedule.machine_predecessors == {0: None, 1: None, 2: 0}
 
 
 def _create_problem_instance(number_of_groups: int | None) -> ProblemInstance:
