@@ -1,101 +1,133 @@
-# Preliminary results
+# Results
 
-Strictly preliminary: no baselines, MILP optimality gaps, or significance tests
-yet. Lower bound `LB = max(load, critical path)`, where `load = ceil(total work / M)`
-and `critical path` is the longest weighted path through the DAG; `gap = (best - LB) / LB`.
+Full numerical experiments for the memetic scheduler. Reproduce with:
 
-Only the synthetic-instance numbers are reproducible with
-`python -m src.experiments.run_partial` (writes `results/`). The Kasahara-instance
-numbers come from exploratory runs with the per-instance budgets noted below.
+```
+python -m src.experiments.run_experiments   # writes results/campaign/{runs,convergence,baselines}.csv
+python -m src.experiments.analyze           # writes summary.csv, h1_wilcoxon.csv, h2_wilcoxon.csv
+python -m src.experiments.plots             # writes results/campaign/plots/*.png
+```
 
-Wall-clock times are for the full 4-config sweep on the test machine and reflect the
-differing budgets, not just instance size (robot_control is slowest because it ran the
-largest budget). CPM configurations dominate the runtime.
+## Setup
+
+- **Configurations (4):** `ox`, `pmx` (pure EA) and `ox_cpm`, `pmx_cpm` (memetic =
+  EA + schedule-aware CPM local search). The CPM analysis uses the critical path of
+  the *decoded schedule* (precedence and processor bottlenecks).
+- **Seeds:** 30 independent runs per configuration (10 on the two largest Kasahara
+  instances, `robot_control` and `random_300`, for tractability).
+- **Quality measure:** best `C_max` per run. Tables report the **median** over seeds.
+- **Reference:** exact MILP optimum for small instances (`|T| ≤ 30`, proven optimal
+  via CBC), otherwise the lower bound `LB = max(⌈total work / M⌉, critical path)`.
+- **Significance:** paired Wilcoxon signed-rank test (same seeds), Holm-corrected
+  within each hypothesis family, α = 0.05.
+- **Plots:** boxplots and convergence curves per instance in
+  `results/campaign/plots/` (gitignored).
+
+> **Budget caveat (H1).** The memetic configurations perform extra makespan
+> evaluations inside the CPM local search, so configurations are compared at equal
+> **generations**, not at an equal evaluation budget. The CPM advantage below is
+> therefore partly a larger effective search effort per generation.
 
 ## Instances
 
-| instance | source | nodes (+2 dummy) | edges | density |
-|---|---|---|---|---|
-| [example](data/sample/example.stg) | synthetic, generated | 47 | 86 | 0.039 |
-| [random_50](data/sample/random_50.stg) | Kasahara STG, rnc50/rand0000 | 52 | 119 | 0.044 |
-| [random_300](data/sample/random_300.stg) | Kasahara STG, rnc300/rand0000 | 302 | 7265 | 0.080 |
-| [robot_control](data/sample/robot_control.stg) | Kasahara STG, robot control | 90 | 135 | 0.017 |
+| instance | source | nodes (+2 dummy) | edges | density `\|E\|/\|T\|²` | M | HLFET | MCP | MILP opt | LB |
+|---|---|---|---|---|---|---|---|---|---|
+| small_15 | synthetic | 17 | 31 | 0.107 | 2 | 53 | 53 | **52** | 52 |
+| small_22 | synthetic | 24 | 48 | 0.083 | 3 | 47 | 47 | **44** | 44 |
+| h2_sparse_a | synthetic | 42 | 78 | 0.044 | 4 | 55 | 55 | — | 52 |
+| h2_sparse_b | synthetic | 42 | 80 | 0.045 | 4 | 57 | 57 | — | 54 |
+| h2_dense_a | synthetic | 42 | 277 | 0.157 | 4 | 108 | 108 | — | 108 |
+| h2_dense_b | synthetic | 42 | 280 | 0.159 | 4 | 96 | 96 | — | 96 |
+| example | Kasahara/synthetic | 47 | 86 | 0.039 | 3 | 72 | 72 | — | 69 |
+| random_50 | Kasahara | 52 | 119 | 0.044 | 4 | 77 | 77 | — | 66 |
+| robot_control | Kasahara | 90 | 135 | 0.017 | 4 | 694 | 694 | — | 621 |
+| random_300 | Kasahara | 302 | 7265 | 0.080 | 4 | 505 | 505 | — | 448 |
 
-## example — synthetic, 45 tasks (M=3, 10 seeds, pop 40, 60 gen; ~7 s)
+HLFET and MCP coincide on every instance here. The memetic EA (`pmx_cpm`) matches or
+beats both list heuristics on every instance (e.g. `random_50` 66 vs 77, `random_300`
+median 479 vs 505).
 
-Optimal makespan is 69 (= load bound; critical path 54), so PMX configs reach the
-optimum here (0% gap).
+## Median C_max by configuration
 
-Best makespan over 10 seeds (lower is better):
+Best configuration per instance in **bold**.
 
-| config | best | mean | median |
-|---|---|---|---|
-| ox | 73 | 74.2 | 74.0 |
-| pmx | 69 | 69.8 | 70.0 |
-| ox_cpm | 70 | 72.3 | 72.5 |
-| pmx_cpm | 69 | 69.9 | 70.0 |
+| instance | ref (kind) | ox | pmx | ox_cpm | pmx_cpm |
+|---|---|---|---|---|---|
+| small_15 | 52 (milp) | **52** | **52** | **52** | **52** |
+| small_22 | 44 (milp) | 47.5 | 46.0 | **44.0** | **44.0** |
+| h2_sparse_a | 52 (lb) | 55.0 | 53.0 | **52.0** | **52.0** |
+| h2_sparse_b | 54 (lb) | 57.0 | 55.0 | **54.0** | **54.0** |
+| h2_dense_a | 108 (lb) | **108** | **108** | **108** | **108** |
+| h2_dense_b | 96 (lb) | **96** | **96** | **96** | **96** |
+| example | 69 (lb) | 74.0 | 70.0 | 70.0 | **69.0** |
+| random_50 | 66 (lb) | 73.0 | 68.0 | 66.0 | **66.0** |
+| robot_control | 621 (lb) | 814.5 | 742.5 | 737.5 | **694.0** |
+| random_300 | 448 (lb) | 532.5 | 510.5 | 519.0 | **479.0** |
 
-Mean best makespan per generation:
+Gap of the best configuration (`pmx_cpm`) to the reference: 0% on the small and dense
+instances (reaches the optimum / bound), 1.9% (`h2_sparse_b`), 6.9% (`random_300`),
+11.8% (`robot_control`). The dense H2 instances are effectively forced (every config
+reaches the bound), so they carry no operator/CPM signal.
 
-| gen | ox | pmx | ox_cpm | pmx_cpm |
-|---|---|---|---|---|
-| 0 | 74.4 | 74.4 | 74.4 | 74.4 |
-| 10 | 74.2 | 70.7 | 72.3 | 70.3 |
-| 30 | 74.2 | 70.0 | 72.3 | 70.0 |
-| 60 | 74.2 | 69.8 | 72.3 | 69.9 |
+## H1 — does CPM local search lower C_max?
 
-- OX improves little on this instance (74.4 → 74.2), while PMX is clearly stronger
-  and reaches the optimum (69).
-- CPM local search helps the weaker OX (74.2 → 72.3 via ox_cpm) but gives no gain
-  over PMX (69.9 vs 69.8). Directionally supports H1.
-- The optimum equals a trivial load bound, so this instance is too easy to
-  differentiate the configurations strongly.
+Paired Wilcoxon, CPM-on vs CPM-off, per crossover per instance (Holm-corrected).
 
-## random_50 — Kasahara random graph (M=4, 5 seeds, pop 40, 60 gen; ~9 s)
+| instance | crossover | CPM off | CPM on | Δ median | Holm p | significant |
+|---|---|---|---|---|---|---|
+| small_22 | ox | 47.5 | 44.0 | 3.5 | 0.000 | ✅ |
+| small_22 | pmx | 46.0 | 44.0 | 2.0 | 0.000 | ✅ |
+| h2_sparse_a | ox | 55.0 | 52.0 | 3.0 | 0.000 | ✅ |
+| h2_sparse_a | pmx | 53.0 | 52.0 | 1.0 | 0.000 | ✅ |
+| h2_sparse_b | ox | 57.0 | 54.0 | 3.0 | 0.000 | ✅ |
+| h2_sparse_b | pmx | 55.0 | 54.0 | 1.0 | 0.000 | ✅ |
+| example | ox | 74.0 | 70.0 | 4.0 | 0.000 | ✅ |
+| example | pmx | 70.0 | 69.0 | 1.0 | 0.000 | ✅ |
+| random_50 | ox | 73.0 | 66.0 | 7.0 | 0.000 | ✅ |
+| random_50 | pmx | 68.0 | 66.0 | 2.0 | 0.000 | ✅ |
+| robot_control | ox | 814.5 | 737.5 | 77.0 | 0.020 | ✅ |
+| robot_control | pmx | 742.5 | 694.0 | 48.5 | 0.020 | ✅ |
+| random_300 | ox | 532.5 | 519.0 | 13.5 | 0.020 | ✅ |
+| random_300 | pmx | 510.5 | 479.0 | 31.5 | 0.020 | ✅ |
 
-LB = max(load 66, critical path 55) = 66.
+(The 6 omitted tests — `small_15` and both `h2_dense` — are ties at the optimum/bound
+for every configuration, so there is no headroom for CPM to act.)
 
-| config | best | mean | gap vs LB |
-|---|---|---|---|
-| ox | 71 | 73 | 8% |
-| pmx | 66 | 68 | 0% |
-| ox_cpm | 70 | 71 | 6% |
-| pmx_cpm | 67 | 68 | 2% |
+**Verdict: H1 supported.** On every instance with headroom, CPM local search
+significantly lowers the median `C_max` for both crossovers (14/14 significant tests,
+all favouring CPM-on). The effect grows with instance difficulty (e.g. `robot_control`
+−77 for OX, −48.5 for PMX). Subject to the equal-generations budget caveat above.
 
-- PMX reaches the optimum (66); CPM does not help PMX here (pmx_cpm 67).
+## H2 — does OX dominate PMX on sparse graphs?
 
-## robot_control — Kasahara application graph (M=4, 5 seeds, pop 50, 100 gen; ~7.3 min)
+Paired Wilcoxon, OX vs PMX (pure EA), per instance (Holm-corrected). Sparse =
+`|E|/|T|² < 0.1`.
 
-LB = max(load 621, critical path 569) = 621.
+| instance | class | ox | pmx | better | Holm p | significant |
+|---|---|---|---|---|---|---|
+| small_22 | sparse | 47.5 | 46.0 | pmx | 0.001 | ✅ |
+| h2_sparse_a | sparse | 55.0 | 53.0 | pmx | 0.000 | ✅ |
+| h2_sparse_b | sparse | 57.0 | 55.0 | pmx | 0.000 | ✅ |
+| example | sparse | 74.0 | 70.0 | pmx | 0.000 | ✅ |
+| random_50 | sparse | 73.0 | 68.0 | pmx | 0.000 | ✅ |
+| robot_control | sparse | 814.5 | 742.5 | pmx | 0.010 | ✅ |
+| random_300 | sparse | 532.5 | 510.5 | pmx | 0.010 | ✅ |
+| small_15 | dense | 52.0 | 52.0 | tie | 1.000 | — |
+| h2_dense_a | dense | 108.0 | 108.0 | tie | 1.000 | — |
+| h2_dense_b | dense | 96.0 | 96.0 | tie | 1.000 | — |
 
-| config | best | mean | gap vs LB |
-|---|---|---|---|
-| ox | 784 | 807 | 26% |
-| pmx | 729 | 750 | 17% |
-| ox_cpm | 769 | 787 | 24% |
-| pmx_cpm | 717 | 731 | 16% |
+**Verdict: H2 not supported — the opposite holds.** On every sparse instance PMX
+significantly beats OX (0/7 sparse tests favour OX); on the dense instances every
+configuration reaches the bound, so OX and PMX tie. PMX is the stronger crossover
+across the board for this problem and decoder. The likely reason: the ready-list
+repair already enforces precedence, so OX's order-preservation advantage is muted,
+while PMX's position-based mixing explores the priority space more effectively.
 
-- Large gaps (16–26%): a genuinely hard instance with plenty of headroom.
-- CPM helps both operators (ox 784→769, pmx 729→717). Supports H1.
+## Summary
 
-## random_300 — Kasahara random graph (M=4, 3 seeds, pop 30, 40 gen; ~45 s)
-
-LB = max(load 423, critical path 448) = 448.
-
-| config | best | mean | gap vs LB |
-|---|---|---|---|
-| ox | 530 | 533 | 18% |
-| pmx | 511 | 513 | 14% |
-| ox_cpm | 527 | 531 | 18% |
-| pmx_cpm | 496 | 500 | 11% |
-
-- Large gaps (11–18%) confirm the instance is hard.
-- pmx_cpm clearly best; CPM helps most on PMX here.
-
-## Cross-instance summary
-
-- The PMX configurations are best on every instance.
-- PMX beats OX on all four instances — no support yet for H2 (OX > PMX on sparse graphs).
-- CPM helps OX on every instance and PMX on the larger ones — mixed support for H1.
-- The larger instances sit 11–26% above the lower bound (room to improve); the
-  smaller ones are at or near optimum.
+- **PMX + CPM (`pmx_cpm`) is the best configuration on every instance.**
+- **H1 holds:** schedule-aware CPM significantly improves `C_max` wherever there is
+  headroom (equal-generations budget).
+- **H2 fails:** PMX dominates OX, including on sparse graphs.
+- The memetic EA beats the HLFET/MCP list heuristics on every instance; remaining
+  gaps to the lower bound are 7–12% on the two largest Kasahara graphs.

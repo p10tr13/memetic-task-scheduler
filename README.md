@@ -11,7 +11,7 @@ task scheduling with precedence constraints, minimizing makespan (C_max).
 - `src/solvers/heuristics.py` — HLFET and MCP list-scheduling baselines
 - `src/solvers/milp.py` — exact time-indexed MILP (CBC via PuLP) for small instances, used to report optimality gaps
 - `src/main.py` — runs HLFET, MCP, the memetic EA, and the MILP on a small bundled instance and prints each optimality gap
-- `src/experiments/run_partial.py` — OX-vs-PMX and CPM-on/off comparison runner
+- `src/experiments/` — experiment campaign: `instances.py` (benchmark set), `run_experiments.py` (OX/PMX × CPM-on/off matrix, baselines, MILP gap), `analyze.py` (Wilcoxon for H1/H2), `plots.py` (boxplots, convergence); `run_partial.py` is the older quick-checkpoint runner
 - `data/sample/` — bundled STG instances for local runs (incl. `small.stg`, small enough to solve to optimality)
 - `tests/` — unit tests
 - `docs/preliminary/` — preliminary documentation
@@ -35,10 +35,13 @@ and print each makespan with its gap to the MILP optimum:
 python -m src.main
 ```
 
-Run the partial-results comparison (writes CSVs to `results/`, gitignored):
+Run the full experiment campaign, then the analysis and plots (all write to
+`results/campaign/`, gitignored):
 
 ```
-python -m src.experiments.run_partial
+python -m src.experiments.run_experiments   # add --quick for a fast smoke test
+python -m src.experiments.analyze
+python -m src.experiments.plots
 ```
 
 Run the tests:
@@ -47,7 +50,8 @@ Run the tests:
 pytest
 ```
 
-## Preliminary results
+## Results
 
-See [RESULTS.md](RESULTS.md). Reproduce the synthetic-instance run with
-`python -m src.experiments.run_partial` (writes `results/`).
+See [RESULTS.md](RESULTS.md) for the full campaign: optimality/lower-bound gaps,
+the HLFET/MCP baselines, and the Wilcoxon tests for H1 (CPM lowers C_max) and H2
+(OX vs PMX on sparse graphs). Reproduce with the commands above.
