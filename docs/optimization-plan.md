@@ -202,4 +202,24 @@ back-to-back A/B runs (the M4 is noisy; a single run is unreliable).
 **30.8s → 13.3s = 2.32×**, makespans `[108]×5` on both base and optimized. **O1 multiplies this
 by ~`jobs×`** on top (independent cells run concurrently), so on the 10-core M4 the full campaign
 comfortably reaches the **tens-of-minutes** target.
+
+### Timing-correctness follow-up to O1
+
+O1 broke the *recorded* per-cell timing: `run_single` measured only **wall clock**
+(`perf_counter`), which inflates under CPU contention. The identical deterministic cell
+(`syn_t40_p035 pmx_cpm`, 3 seeds) recorded **11.4s solo** but **~19.9s** when 8 such cells ran
+at once (+74%) — so any campaign at the new `--jobs` default would save inflated, non-comparable
+per-cell times. Fixed by:
+
+- **`run_single`** now records **both** wall and CPU time per seed (`time.process_time`):
+  `per_seed_seconds`/`total_seconds`/`mean_seconds` stay wall (back-compat), plus new
+  `*_cpu_seconds`. `schema_version` → 2. Under the same 8-way test, **wall inflated +69% but CPU
+  only +30%** — CPU time is the parallelism-robust per-cell cost metric.
+- **`run_campaign`** now writes `campaign_timing.json` (end-to-end `wall_seconds`, plus
+  `baselines_wall_seconds`/`cells_wall_seconds`, `jobs`, `cells_run`) — the real throughput
+  number, and `jobs` flags whether per-cell wall times were isolated.
+- **Caveat:** the residual +30% CPU inflation is Apple-Silicon frequency throttling / E-core
+  scheduling under all-core load; no in-process clock removes it. **For wall-clock per-cell cost
+  claims, run with `--jobs 1`.** Parallel runs are for throughput; trust `*_cpu_seconds` for
+  cross-cell cost comparison.
 </content>

@@ -16,7 +16,7 @@ that cell; nothing else in the campaign is touched.
 
 import argparse
 import time
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
@@ -30,8 +30,27 @@ from src.solvers.evolutionary.local_search import cpm_local_search
 from src.solvers.evolutionary.strategies import swap_mutation, tournament_selection
 
 LOCAL_SEARCH_ATTEMPTS = 20
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 _CROSSOVERS = {"ox": ox_crossover, "pmx": pmx_crossover}
+
+
+@dataclass
+class _CellRun:
+    """Per-cell execution outputs, including both wall and CPU timings.
+
+    Wall seconds (``time.perf_counter``) include time the process spent waiting
+    for a CPU, so they inflate when cells run concurrently (``--jobs`` > 1). CPU
+    seconds (``time.process_time``) count only on-core time and are the
+    parallelism-robust per-seed cost metric; compare cell costs with those, and
+    use a ``--jobs 1`` run for wall-clock cost claims.
+    """
+
+    run_rows: list[dict] = field(default_factory=list)
+    convergence_rows: list[dict] = field(default_factory=list)
+    per_seed_wall_seconds: list[float] = field(default_factory=list)
+    per_seed_cpu_seconds: list[float] = field(default_factory=list)
+    started_utc: str = ""
+
 
 # Default EA hyperparameters. These are GLOBAL, not per-instance: a benchmark
 # instance is a fixed problem, while the search budget is an experiment knob.
@@ -93,14 +112,14 @@ def main(argv: list[str] | None = None) -> None:
     campaign = layout.resolve_campaign_dir(args.campaign, args.name)
     cell = layout.cell_dir(campaign, args.instance, args.label)
 
-    run_rows, convergence_rows, per_seed_seconds, started_utc = _execute(entry, args)
+    cell_run = _execute(entry, args)
 
     write_cell(
         cell,
         _config_payload(entry, args),
-        run_rows,
-        convergence_rows,
-        _timing_payload(entry, args, per_seed_seconds, started_utc),
+        cell_run.run_rows,
+        cell_run.convergence_rows,
+        _timing_payload(entry, args, cell_run),
     )
     print(f"[{entry.name}__{args.label}] {args.seeds} seeds -> {cell}")
 
@@ -120,8 +139,13 @@ def _resolve_defaults(args: argparse.Namespace) -> None:
 def _execute(
     entry: InstanceEntry,
     args: argparse.Namespace,
-) -> tuple[list[dict], list[dict], list[float], str]:
-    """Runs the EA across the seed range, returning rows and per-seed timings."""
+) -> _CellRun:
+    """Runs the EA across the seed range, returning rows and per-seed timings.
+
+    Each seed is timed with both a wall clock (``perf_counter``) and a CPU clock
+    (``process_time``) so the saved timing stays meaningful even when cells run
+    concurrently; only the EA call itself is timed, not I/O or setup.
+    """
     strategies = build_strategies(args.crossover, args.cpm)
     base_config = EvolutionConfig(
         population_size=args.population,
@@ -130,25 +154,26 @@ def _execute(
         mutation_probability=args.mutation_prob,
     )
 
-    run_rows: list[dict] = []
-    convergence_rows: list[dict] = []
-    per_seed_seconds: list[float] = []
-    started_utc = datetime.now(timezone.utc).isoformat()
+    cell_run = _CellRun(started_utc=datetime.now(timezone.utc).isoformat())
 
     for seed in range(args.seed_start, args.seed_start + args.seeds):
-        start = time.perf_counter()
+        wall_start = time.perf_counter()
+        cpu_start = time.process_time()
         result = run_evolution(
             problem_instance=entry.problem_instance,
             config=replace(base_config, random_seed=seed),
             strategies=strategies,
         )
-        per_seed_seconds.append(round(time.perf_counter() - start, 4))
-        run_rows.append(_run_row(entry, args, seed, result.best_makespan))
-        convergence_rows.extend(
+        cell_run.per_seed_wall_seconds.append(
+            round(time.perf_counter() - wall_start, 4)
+        )
+        cell_run.per_seed_cpu_seconds.append(round(time.process_time() - cpu_start, 4))
+        cell_run.run_rows.append(_run_row(entry, args, seed, result.best_makespan))
+        cell_run.convergence_rows.extend(
             _convergence_rows(entry, args, seed, result.generation_best_makespans)
         )
 
-    return run_rows, convergence_rows, per_seed_seconds, started_utc
+    return cell_run
 
 
 def _run_row(
@@ -215,20 +240,27 @@ def _config_payload(entry: InstanceEntry, args: argparse.Namespace) -> dict:
 def _timing_payload(
     entry: InstanceEntry,
     args: argparse.Namespace,
-    per_seed_seconds: list[float],
-    started_utc: str,
+    cell_run: _CellRun,
 ) -> dict:
-    """Builds the cell's timing.json payload."""
-    total = round(sum(per_seed_seconds), 4)
-    mean = round(total / len(per_seed_seconds), 4) if per_seed_seconds else 0.0
+    """Builds the cell's timing.json payload.
+
+    Records wall and CPU seconds separately. ``*_seconds`` are wall clock (kept
+    under the original names); ``*_cpu_seconds`` count only on-core time and stay
+    comparable across cells even when the campaign runs cells concurrently.
+    """
+    wall = cell_run.per_seed_wall_seconds
+    cpu = cell_run.per_seed_cpu_seconds
     return {
         "schema_version": SCHEMA_VERSION,
         "instance": entry.name,
         "label": args.label,
-        "per_seed_seconds": per_seed_seconds,
-        "total_seconds": total,
-        "mean_seconds": mean,
-        "started_utc": started_utc,
+        "per_seed_seconds": wall,
+        "total_seconds": round(sum(wall), 4),
+        "mean_seconds": round(sum(wall) / len(wall), 4) if wall else 0.0,
+        "per_seed_cpu_seconds": cpu,
+        "total_cpu_seconds": round(sum(cpu), 4),
+        "mean_cpu_seconds": round(sum(cpu) / len(cpu), 4) if cpu else 0.0,
+        "started_utc": cell_run.started_utc,
     }
 
 

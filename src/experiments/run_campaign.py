@@ -16,11 +16,14 @@ import argparse
 import os
 import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 
 from src.experiments import layout
 from src.experiments.instances import list_instances
 
 REPOSITORY_ROOT = layout.REPOSITORY_ROOT
+CAMPAIGN_SCHEMA_VERSION = 1
 
 # The whole campaign: these four methods x every instance. Each runs at the
 # global default budget (pure EA = no CPM local search; memetic = CPM on).
@@ -42,16 +45,34 @@ def main(argv: list[str] | None = None) -> None:
         f"Campaign: {len(instances)} instances x {len(METHODS)} methods -> {campaign}"
     )
 
+    started_utc = datetime.now(timezone.utc).isoformat()
+    wall_start = time.perf_counter()
+
     if not args.no_baselines:
         _baselines(args, campaign, instances)
+    baselines_seconds = round(time.perf_counter() - wall_start, 4)
 
     pending = [
         (instance, method)
         for instance, method in cells
         if not (args.skip_existing_cells and _cell_exists(campaign, instance, method))
     ]
+    cells_start = time.perf_counter()
     failures = _run_cells(args, campaign, pending)
+    cells_seconds = round(time.perf_counter() - cells_start, 4)
 
+    _write_campaign_timing(
+        campaign,
+        {
+            "schema_version": CAMPAIGN_SCHEMA_VERSION,
+            "started_utc": started_utc,
+            "jobs": args.jobs,
+            "cells_run": len(pending),
+            "wall_seconds": round(time.perf_counter() - wall_start, 4),
+            "baselines_wall_seconds": baselines_seconds,
+            "cells_wall_seconds": cells_seconds,
+        },
+    )
     _report(campaign, failures)
 
 
@@ -164,6 +185,16 @@ def _cell_exists(campaign, instance: str, method: dict) -> bool:
     """Returns whether a cell already has a written config.json."""
     label = layout.cell_label(method["crossover"], method["cpm"])
     return (layout.cell_dir(campaign, instance, label) / "config.json").exists()
+
+
+def _write_campaign_timing(campaign, timing: dict) -> None:
+    """Writes the campaign-level wall-clock timing.
+
+    This is the real end-to-end cost under ``--jobs`` parallelism; per-cell
+    ``timing.json`` wall times are inflated by contention when jobs > 1, so the
+    recorded ``jobs`` says whether those per-cell wall times are isolated.
+    """
+    layout.write_json(campaign / "campaign_timing.json", timing)
 
 
 def _report(campaign, failures: list[str]) -> None:
