@@ -179,4 +179,27 @@ Landing **O1–O4** (~90–170 LOC) gets the bulk of the speedup; O5/O6 are incr
 - These changes are independent of the currently-running campaign (different repo copy); they
   target the **next** run. The in-flight campaign should finish on the original, unmodified
   code for dataset consistency.
+
+---
+
+## Implementation results (branch `optimize`, off `4d70c2b`)
+
+Each step was committed only after `pytest` stayed green (94 tests), `black --check`/`pylint`
+stayed clean (10.00/10), and an A/B measurement on `syn_t40_p035` (pop 50, gen 50, 20 attempts)
+confirmed **identical** per-seed makespans **and** convergence curves. Timings are min-of-N
+back-to-back A/B runs (the M4 is noisy; a single run is unreliable).
+
+| # | Status | Commit | Measured effect (results identical throughout) |
+|---|---|---|---|
+| O1 | ✅ landed | `f566e2d` | Quick campaign (12 cells) `--jobs 1` 6.4s → `--jobs 6` 2.8s (2.3×); scales ~`jobs×` and is overhead-bound only on the tiny quick set. `runs.csv` byte-identical seq vs parallel. |
+| O2 | ✅ landed | `620aac6` | A/B 31.75s → 25.37s (**1.25×**). DAG check was ~0.5–0.66× a decode and ran 50k×/seed. |
+| O3 | ✅ landed | `d92a1ad` | A/B ~**1.05×** (stable direction). Removes validation from ~97% of decodes; fitness path still validates. |
+| O4 | ✅ landed | `d311aad` | Decoder faster on every instance (t40 1.16×, fpppp 1.11×); full-EA min-of-5 14.98s vs 15.39s. |
+| O5 | ✅ landed | `79185fb` | A/B min-of-5 15.20s → 9.60s (**1.58×**) — the biggest core win. Critical set reused across rejected attempts. |
+| O6 | ⏭️ skipped | — | No speedup: even decode-only it was *slower* on every instance (t500 2568 vs 2373 µs/decode). The lint locals-limit forced `slot[]` indexing whose per-task cost outweighs the saved end-of-loop `max(dict.values())` (already fast at C level). Left for a later, cleaner attempt. |
+
+**Cumulative per-cell core speedup (O2–O5, single process):** `syn_t40_p035` min-of-3
+**30.8s → 13.3s = 2.32×**, makespans `[108]×5` on both base and optimized. **O1 multiplies this
+by ~`jobs×`** on top (independent cells run concurrently), so on the 10-core M4 the full campaign
+comfortably reaches the **tens-of-minutes** target.
 </content>
