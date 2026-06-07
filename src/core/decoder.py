@@ -4,7 +4,7 @@ import heapq
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from src.core.models import ProblemInstance
+from src.core.models import ProblemInstance, predecessors_map
 
 
 @dataclass(frozen=True)
@@ -75,6 +75,32 @@ def compute_schedule(
     if validate:
         _validate_schedule_inputs(task_permutation, problem_instance)
 
+    predecessors = predecessors_map(problem_instance.priority_relationship)
+    return _list_schedule(
+        task_permutation, problem_instance, processor_count, predecessors
+    )
+
+
+def _list_schedule(
+    task_permutation: Sequence[int],
+    problem_instance: ProblemInstance,
+    processor_count: int,
+    predecessors: dict[int, list[int]],
+) -> Schedule:
+    """Runs the list-scheduling decode loop over a validated permutation.
+
+    Args:
+        task_permutation: Task numbers in the order used by list scheduling.
+        problem_instance: Scheduling problem instance.
+        processor_count: Positive number of processors.
+        predecessors: Precomputed task -> predecessor-list mapping.
+
+    Returns:
+        The decoded schedule.
+
+    Raises:
+        ValueError: If a task is scheduled before one of its predecessors.
+    """
     processor_heap = [(0, processor_id) for processor_id in range(processor_count)]
     heapq.heapify(processor_heap)
     last_task_on_processor: dict[int, int | None] = {
@@ -86,7 +112,7 @@ def compute_schedule(
 
     for task_number in task_permutation:
         predecessor_finish_time = _predecessor_finish_time(
-            problem_instance, finish_times, task_number
+            predecessors, finish_times, task_number
         )
 
         processor_available_time, processor_id = heapq.heappop(processor_heap)
@@ -128,14 +154,14 @@ def _validate_schedule_inputs(
 
 
 def _predecessor_finish_time(
-    problem_instance: ProblemInstance,
+    predecessors: dict[int, list[int]],
     finish_times: dict[int, int],
     task_number: int,
 ) -> int:
     """Returns the latest finish time among a task's scheduled predecessors.
 
     Args:
-        problem_instance: Scheduling problem instance.
+        predecessors: Precomputed task -> predecessor-list mapping.
         finish_times: Finish times of already-scheduled tasks.
         task_number: Task whose predecessors are inspected.
 
@@ -147,9 +173,7 @@ def _predecessor_finish_time(
     """
     predecessor_finish_time = 0
 
-    for predecessor_number in problem_instance.priority_relationship.predecessors(
-        task_number
-    ):
+    for predecessor_number in predecessors[task_number]:
         if predecessor_number not in finish_times:
             raise ValueError(
                 f"Task {task_number} is scheduled before predecessor "

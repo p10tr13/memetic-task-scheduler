@@ -6,7 +6,7 @@ from collections.abc import Sequence
 import networkx as nx
 
 from src.core.decoder import Schedule, compute_schedule
-from src.core.models import ProblemInstance
+from src.core.models import ProblemInstance, predecessors_map
 
 # Graphs already confirmed acyclic. The acyclicity check is O(V+E) and the graph
 # never changes during a run, so it is hoisted out of the per-call hot path and
@@ -99,9 +99,8 @@ def _binding_predecessors(
         return []
 
     binding_predecessors = []
-    for predecessor_number in problem_instance.priority_relationship.predecessors(
-        task_number
-    ):
+    predecessors = predecessors_map(problem_instance.priority_relationship)
+    for predecessor_number in predecessors[task_number]:
         if schedule.finish_times[predecessor_number] == start_time:
             binding_predecessors.append(predecessor_number)
 

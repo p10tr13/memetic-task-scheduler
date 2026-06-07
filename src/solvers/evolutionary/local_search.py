@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 from src.core.cpm_utils import identify_critical_tasks
 from src.core.decoder import calculate_makespan
-from src.core.models import ProblemInstance
+from src.core.models import ProblemInstance, predecessors_map
 
 
 def get_left_boundary(
@@ -34,8 +34,9 @@ def get_left_boundary(
     if task_id not in task_indices:
         raise ValueError(f"Task {task_id} is missing from the permutation.")
 
+    predecessors = predecessors_map(problem_instance.priority_relationship)
     predecessor_indices = []
-    for predecessor_id in problem_instance.priority_relationship.predecessors(task_id):
+    for predecessor_id in predecessors[task_id]:
         if predecessor_id not in task_indices:
             raise ValueError(
                 f"Predecessor {predecessor_id} is missing from the permutation."
