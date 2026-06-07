@@ -28,12 +28,15 @@ class Schedule:
 def calculate_makespan(
     task_permutation: Sequence[int],
     problem_instance: ProblemInstance,
+    validate: bool = True,
 ) -> int:
     """Calculates makespan for a precedence-valid task permutation.
 
     Args:
         task_permutation: Task numbers in the order used by list scheduling.
         problem_instance: Scheduling problem with processor count, graph, and times.
+        validate: Whether to validate the permutation/time indexes before decoding.
+            EA inner-loop callers pass ``False`` for already-valid permutations.
 
     Returns:
         Makespan produced by scheduling the permutation on available processors.
@@ -41,12 +44,13 @@ def calculate_makespan(
     Raises:
         ValueError: If the processor count, task times, or permutation is invalid.
     """
-    return compute_schedule(task_permutation, problem_instance).makespan
+    return compute_schedule(task_permutation, problem_instance, validate).makespan
 
 
 def compute_schedule(
     task_permutation: Sequence[int],
     problem_instance: ProblemInstance,
+    validate: bool = True,
 ) -> Schedule:
     """Decodes a precedence-valid task permutation into a concrete schedule.
 
@@ -56,6 +60,9 @@ def compute_schedule(
     Args:
         task_permutation: Task numbers in the order used by list scheduling.
         problem_instance: Scheduling problem with processor count, graph, and times.
+        validate: Whether to validate the permutation/time indexes before decoding.
+            EA inner-loop callers pass ``False`` for already-valid permutations;
+            the decoder still raises on precedence violations either way.
 
     Returns:
         Start times, finish times, per-processor predecessors, and the makespan.
@@ -64,10 +71,9 @@ def compute_schedule(
         ValueError: If the processor count, task times, or permutation is invalid.
     """
     processor_count = _validate_processor_count(problem_instance)
-    graph_task_numbers = set(problem_instance.priority_relationship.nodes)
 
-    _validate_task_permutation(task_permutation, graph_task_numbers)
-    _validate_task_time_indexes(problem_instance, graph_task_numbers)
+    if validate:
+        _validate_schedule_inputs(task_permutation, problem_instance)
 
     processor_heap = [(0, processor_id) for processor_id in range(processor_count)]
     heapq.heapify(processor_heap)
@@ -101,6 +107,24 @@ def compute_schedule(
         machine_predecessors=machine_predecessors,
         makespan=max(finish_times.values(), default=0),
     )
+
+
+def _validate_schedule_inputs(
+    task_permutation: Sequence[int],
+    problem_instance: ProblemInstance,
+) -> None:
+    """Validates the permutation and task-time indexes against the graph.
+
+    Args:
+        task_permutation: Task numbers in the order used by list scheduling.
+        problem_instance: Scheduling problem instance.
+
+    Raises:
+        ValueError: If the permutation or task-time indexes are invalid.
+    """
+    graph_task_numbers = set(problem_instance.priority_relationship.nodes)
+    _validate_task_permutation(task_permutation, graph_task_numbers)
+    _validate_task_time_indexes(problem_instance, graph_task_numbers)
 
 
 def _predecessor_finish_time(

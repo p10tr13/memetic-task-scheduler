@@ -100,7 +100,9 @@ def cpm_local_search(
         Final task order after accepted local search moves.
     """
     current_permutation = list(task_permutation)
-    current_cmax = calculate_makespan(current_permutation, problem_instance)
+    current_cmax = calculate_makespan(
+        current_permutation, problem_instance, validate=False
+    )
 
     if max_attempts <= 0:
         return current_permutation
@@ -127,7 +129,7 @@ def cpm_local_search(
             task_id,
             target_index,
         )
-        new_cmax = calculate_makespan(mutant, problem_instance)
+        new_cmax = calculate_makespan(mutant, problem_instance, validate=False)
 
         if new_cmax <= current_cmax:
             current_permutation = mutant

@@ -56,7 +56,7 @@ def identify_critical_tasks(
     """
     _ensure_acyclic(problem_instance.priority_relationship)
 
-    schedule = compute_schedule(task_permutation, problem_instance)
+    schedule = compute_schedule(task_permutation, problem_instance, validate=False)
     critical_tasks: set[int] = set()
     pending = [
         task_number
