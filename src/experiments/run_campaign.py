@@ -13,6 +13,7 @@ missing cells; nothing shares a single clobberable file.
 """
 
 import argparse
+import os
 import subprocess
 import sys
 
@@ -44,19 +45,81 @@ def main(argv: list[str] | None = None) -> None:
     if not args.no_baselines:
         _baselines(args, campaign, instances)
 
-    failures: list[str] = []
-    for instance, method in cells:
-        if args.skip_existing_cells and _cell_exists(campaign, instance, method):
-            continue
-        if _run(
-            args, "run_single", _cell_flags(campaign, instance, method, args.quick)
-        ):
-            label = layout.cell_label(method["crossover"], method["cpm"])
-            failures.append(f"{instance}/{label}")
-            if not args.continue_on_error:
-                break
+    pending = [
+        (instance, method)
+        for instance, method in cells
+        if not (args.skip_existing_cells and _cell_exists(campaign, instance, method))
+    ]
+    failures = _run_cells(args, campaign, pending)
 
     _report(campaign, failures)
+
+
+def _run_cells(
+    args: argparse.Namespace,
+    campaign,
+    cells: list[tuple[str, dict]],
+) -> list[str]:
+    """Runs the (instance, method) cells, up to ``--jobs`` in parallel.
+
+    Cells are fully independent isolated subprocesses, so running several at once
+    only changes wall-clock, never results. Failure semantics match the
+    sequential runner: without ``--continue-on-error`` the first failure stops
+    launching new cells (already-launched ones are left to finish).
+    """
+    failures: list[str] = []
+    running: list[tuple[subprocess.Popen, str]] = []
+    stop = False
+    index = 0
+
+    while (index < len(cells) and not stop) or running:
+        while not stop and index < len(cells) and len(running) < args.jobs:
+            instance, method = cells[index]
+            index += 1
+            command = _cell_command(args, campaign, instance, method)
+            label = layout.cell_label(method["crossover"], method["cpm"])
+            # Process is pool-managed and outlives this scope; reaped in _wait_any.
+            process = subprocess.Popen(  # pylint: disable=consider-using-with
+                command, cwd=str(REPOSITORY_ROOT)
+            )
+            running.append((process, f"{instance}/{label}"))
+
+        finished = _wait_any(running)
+        for process, cell_label in finished:
+            running.remove((process, cell_label))
+            if process.returncode != 0:
+                failures.append(cell_label)
+                if not args.continue_on_error:
+                    stop = True
+
+    return failures
+
+
+def _wait_any(
+    running: list[tuple[subprocess.Popen, str]],
+) -> list[tuple[subprocess.Popen, str]]:
+    """Blocks until at least one running cell exits; returns the finished ones."""
+    if not running:
+        return []
+    # Block on the oldest, then reap any others that finished in the meantime.
+    running[0][0].wait()
+    return [pair for pair in running if pair[0].poll() is not None]
+
+
+def _cell_command(
+    args: argparse.Namespace,
+    campaign,
+    instance: str,
+    method: dict,
+) -> list[str]:
+    """Builds the run_single subprocess command for one cell."""
+    flags = _cell_flags(campaign, instance, method, args.quick)
+    return [args.python, "-m", "src.experiments.run_single", *flags]
+
+
+def _default_jobs() -> int:
+    """Default concurrency: leave two cores free, but always at least one job."""
+    return max(1, (os.cpu_count() or 2) - 2)
 
 
 def _run(args: argparse.Namespace, module: str, flags: list[str]) -> int:
@@ -133,6 +196,12 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         "--python",
         default=sys.executable,
         help="Python interpreter used for the single-run subprocesses.",
+    )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=_default_jobs(),
+        help="Max cells to run concurrently (cells are independent; default: cores-2).",
     )
     parser.add_argument(
         "--continue-on-error",
