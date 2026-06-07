@@ -15,7 +15,7 @@ from src.data.synthetic_generator import generate_synthetic_instance
 from src.solvers.evolutionary.config import EvolutionConfig
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-SAMPLE_DIR = REPOSITORY_ROOT / "data" / "sample"
+DATA_DIR = REPOSITORY_ROOT / "data"
 
 # Real-task count at or below which the time-indexed MILP stays tractable.
 MILP_TASK_LIMIT = 30
@@ -89,21 +89,46 @@ _QUICK_SPECS = (
     _Spec("quick_dense", 3, 20, 8, 3, synthetic=_SyntheticParams(20, 0.3, 3)),
 )
 
-_FULL_SPECS = (
-    # Small synthetic instances — exact MILP optimum available.
-    _Spec("small_15", 2, 30, 40, 30, synthetic=_SyntheticParams(15, 0.18, 11)),
-    _Spec("small_22", 3, 30, 40, 30, synthetic=_SyntheticParams(22, 0.15, 12)),
-    # H2 sparse/dense synthetic pairs (n=40).
-    _Spec("h2_sparse_a", 4, 40, 60, 30, synthetic=_SyntheticParams(40, 0.06, 21)),
-    _Spec("h2_sparse_b", 4, 40, 60, 30, synthetic=_SyntheticParams(40, 0.06, 22)),
-    _Spec("h2_dense_a", 4, 40, 60, 30, synthetic=_SyntheticParams(40, 0.35, 23)),
-    _Spec("h2_dense_b", 4, 40, 60, 30, synthetic=_SyntheticParams(40, 0.35, 24)),
-    # Bundled Kasahara graphs.
-    _Spec("example", 3, 40, 60, 30, file_name="example.stg"),
-    _Spec("random_50", 4, 40, 60, 30, file_name="random_50.stg"),
-    _Spec("robot_control", 4, 50, 100, 10, file_name="robot_control.stg"),
-    _Spec("random_300", 4, 30, 40, 10, file_name="random_300.stg"),
+# Synthetic instances spanning size and density (generated in-memory from these
+# fixed-seed specs; `make data` / scripts.build_data writes the same instances to
+# data/synthetic/*.stg). Density label refers to the requested edge density passed
+# to the generator. Instances with <= MILP_TASK_LIMIT real tasks get an exact MILP
+# reference; the rest use the lower bound.
+_SYNTHETIC_SPECS = (
+    # Naming: syn_t<tasks>_p<round(real edge density * 100), 3-digit>.
+    # name              M  pop gen seeds  (task_count, edge_density, seed)
+    _Spec("syn_t15_p010", 2, 30, 40, 30, synthetic=_SyntheticParams(15, 0.10, 11)),
+    _Spec("syn_t22_p018", 3, 30, 40, 30, synthetic=_SyntheticParams(22, 0.18, 12)),
+    _Spec("syn_t30_p030", 3, 30, 40, 30, synthetic=_SyntheticParams(30, 0.30, 13)),
+    _Spec("syn_t40_p006", 4, 40, 60, 30, synthetic=_SyntheticParams(40, 0.06, 21)),
+    _Spec("syn_t40_p035", 4, 40, 60, 30, synthetic=_SyntheticParams(40, 0.35, 23)),
+    _Spec("syn_t60_p005", 4, 40, 60, 30, synthetic=_SyntheticParams(60, 0.05, 31)),
+    _Spec("syn_t60_p015", 4, 40, 60, 30, synthetic=_SyntheticParams(60, 0.15, 32)),
+    _Spec("syn_t100_p004", 4, 50, 80, 30, synthetic=_SyntheticParams(100, 0.04, 41)),
+    _Spec("syn_t100_p012", 4, 50, 80, 30, synthetic=_SyntheticParams(100, 0.12, 42)),
+    _Spec("syn_t150_p004", 4, 50, 80, 20, synthetic=_SyntheticParams(150, 0.04, 51)),
 )
+
+# Bundled Kasahara STG graphs (zero-communication ver2 + application graphs),
+# chosen to span size and density. See data/optima.csv for published
+# optimal/best-known makespans. Provenance (size/rand-index) is in each file header.
+_KASAHARA_SPECS = (
+    # Naming: <rand-index>_t<tasks>_p<round(real edge density * 100), 3-digit>.
+    # name                    M  pop gen seeds  file
+    _Spec("rand0000_t50_p008", 4, 40, 60, 30, file_name="kasahara/rand0000_t50_p008.stg"),
+    _Spec("rand0093_t50_p078", 4, 40, 60, 30, file_name="kasahara/rand0093_t50_p078.stg"),
+    _Spec("rand0063_t100_p002", 4, 50, 80, 30, file_name="kasahara/rand0063_t100_p002.stg"),
+    _Spec("rand0173_t100_p039", 4, 50, 80, 30, file_name="kasahara/rand0173_t100_p039.stg"),
+    _Spec("rand0071_t300_p001", 4, 50, 80, 15, file_name="kasahara/rand0071_t300_p001.stg"),
+    _Spec("rand0000_t300_p016", 4, 50, 80, 15, file_name="kasahara/rand0000_t300_p016.stg"),
+    _Spec("rand0014_t500_p020", 8, 60, 100, 10, file_name="kasahara/rand0014_t500_p020.stg"),
+    # Application graphs (p = real edge density, same basis as the random graphs).
+    _Spec("robot_t88_p003", 4, 50, 80, 30, file_name="kasahara/robot_t88_p003.stg"),
+    _Spec("sparse_t96_p001", 4, 50, 80, 30, file_name="kasahara/sparse_t96_p001.stg"),
+    _Spec("fpppp_t334_p002", 4, 50, 80, 15, file_name="kasahara/fpppp_t334_p002.stg"),
+)
+
+_FULL_SPECS = _SYNTHETIC_SPECS + _KASAHARA_SPECS
 
 
 def build_instances(quick: bool = False) -> list[ExperimentInstance]:
@@ -123,7 +148,7 @@ def build_instances(quick: bool = False) -> list[ExperimentInstance]:
 def _materialize(spec: _Spec) -> ExperimentInstance:
     """Builds an ExperimentInstance from its declarative spec."""
     if spec.file_name is not None:
-        base_instance = parse_stg_file(SAMPLE_DIR / spec.file_name)
+        base_instance = parse_stg_file(DATA_DIR / spec.file_name)
     else:
         synthetic = spec.synthetic
         base_instance = generate_synthetic_instance(

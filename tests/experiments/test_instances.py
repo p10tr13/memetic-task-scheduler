@@ -22,16 +22,16 @@ def test_build_instances_names_are_unique() -> None:
 def test_small_instances_support_milp_and_large_ones_do_not() -> None:
     instances = {entry.name: entry for entry in build_instances()}
 
-    assert instances["small_15"].supports_milp
-    assert instances["small_22"].supports_milp
-    assert not instances["random_300"].supports_milp
+    assert instances["syn_t15_p010"].supports_milp
+    assert instances["syn_t22_p018"].supports_milp
+    assert not instances["rand0000_t300_p016"].supports_milp
 
 
-def test_h2_density_classes_straddle_the_sparse_threshold() -> None:
+def test_density_classes_straddle_the_sparse_threshold() -> None:
     instances = {entry.name: entry for entry in build_instances()}
 
-    assert instances["h2_sparse_a"].metadata.density < 0.1
-    assert instances["h2_dense_a"].metadata.density >= 0.1
+    assert instances["syn_t40_p006"].metadata.density < 0.1
+    assert instances["syn_t40_p035"].metadata.density >= 0.1
 
 
 def test_quick_set_is_small() -> None:

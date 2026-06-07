@@ -30,7 +30,7 @@ from src.solvers.evolutionary.local_search import cpm_local_search
 from src.solvers.evolutionary.strategies import swap_mutation, tournament_selection
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-INSTANCE_PATH = REPOSITORY_ROOT / "data" / "sample" / "example.stg"
+INSTANCE_PATH = REPOSITORY_ROOT / "data" / "example.stg"
 RESULTS_DIR = REPOSITORY_ROOT / "results"
 NUMBER_OF_GROUPS = 3
 SEEDS = tuple(range(10))

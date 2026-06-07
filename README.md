@@ -12,7 +12,7 @@ task scheduling with precedence constraints, minimizing makespan (C_max).
 - `src/solvers/milp.py` — exact time-indexed MILP (CBC via PuLP) for small instances, used to report optimality gaps
 - `src/main.py` — runs HLFET, MCP, the memetic EA, and the MILP on a small bundled instance and prints each optimality gap
 - `src/experiments/` — experiment campaign: `instances.py` (benchmark set), `run_experiments.py` (OX/PMX × CPM-on/off matrix, baselines, MILP gap), `analyze.py` (Wilcoxon for H1/H2), `plots.py` (boxplots, convergence); `run_partial.py` is the older quick-checkpoint runner
-- `data/sample/` — bundled STG instances for local runs (incl. `small.stg`, small enough to solve to optimality)
+- `data/` — benchmark task graphs (see `data/README.md`): `kasahara/` (10 real STG graphs spanning size/density), `synthetic/` (10 generated graphs, `make data`), `example.stg` (tiny MILP-demo graph), and `optima.csv` (published makespan references for the Kasahara graphs)
 - `tests/` — unit tests
 - `docs/preliminary/` — preliminary documentation
 
