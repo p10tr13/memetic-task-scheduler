@@ -1,0 +1,326 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[polish]{babel}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% --- listings: prosty styl dla fragmentów kodu / poleceń ---
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+}
+
+% --- pomocnicze makro na znaczniki TODO (widoczne na czerwono) ---
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+
+\newcommand{\coursename}{Wstęp do algorytmów ewolucyjnych}
+\newcommand{\projecttitle}{Harmonogramowanie zadań}
+\newcommand{\doctype}{Dokumentacja końcowa}
+\newcommand{\authorone}{Wojciech Jasiński}
+\newcommand{\authortwo}{Piotr Iśtok}
+\newcommand{\projectdate}{Warszawa, \the\year}
+
+\begin{document}
+\sloppy
+
+\begin{titlepage}
+    \centering
+
+    \includegraphics[width=0.8\textwidth]{politechnika.png}\par
+    \vspace{2.5cm}
+
+    {\Large \coursename\par}
+    \vspace{1.2cm}
+
+    {\Huge \bfseries \projecttitle \par}
+    \vspace{1cm}
+
+    {\Large \itshape \doctype \par}
+    \vspace{2cm}
+
+    {\Large Autorzy:\par}
+    \vspace{0.5cm}
+    {\large \authorone\par}
+    \vspace{0.3cm}
+    {\large \authortwo\par}
+
+    \vfill
+
+    {\large \projectdate\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Wprowadzenie i opis problemu}
+% =====================================================================
+\textbf{Motywacja.} Celem niniejszego projektu jest opracowanie oraz implementacja algorytmu ewolucyjnego optymalizującego problem znany szerzej jako harmonogramowanie zadań w środowisku wieloprocesorowym z ograniczeniem pierwszeństwa (\textit{ang. Task Scheduling Problem with Precedence Constraints}). Jako że zadanie to należy do klasy problemów NP-trudnych~\cite{ullman1975}, naturalnym jest wykorzystanie metaheurystyk w celu jego rozwiązania.
+\par\medskip\noindent
+\textbf{Definicja formalna.} Problem zdefiniowany został jako czwórka $(T, p, l, M)$, gdzie:
+\begin{itemize}[itemsep=3pt, topsep=3pt]
+    \item $T = \{t_1, t_2, \dots, t_n\}$ jest zbiorem $n$ zadań do wykonania.
+    \item $p : T \times T \to \{0, 1\}$ koduje relację pierwszeństwa: $p(t_i, t_j) = 1$ oznacza, że zadanie $t_i$ musi zostać zakończone przed rozpoczęciem zadania $t_j$, a wartość $0$ -- brak takiego więzu. Zakładamy, że graf skierowany indukowany przez~$p$ jest acykliczny (DAG); w~przeciwnym razie zbiór rozwiązań dopuszczalnych jest pusty.
+    \item $l: T \to \mathbb{N}$ jest funkcją przypisującą każdemu zadaniu czas jego trwania.
+    \item $M \in \mathbb{N}$ jest stałą liczbą grup pracowników, między które należy rozdzielić zadania. Grupa jest traktowana jako jedna jednostka, mogąca wykonać dowolne zadanie w jednym czasie nie łamiące relacji pierwszeństwa, dlatego będziemy się do niej odnosić jako procesor dla zgodności z literaturą i standardem.
+\end{itemize}
+\noindent
+\textbf{Funkcja celu i ograniczenia.} Głównym wyzwaniem projektowym jest dokonanie takiego podziału zadań między $M$ procesorów, aby zachować spójność logiczną procesu. Funkcją celu jest minimalizacja czasu zakończenia wszystkich zadań, czyli tzw. \textit{makespan} ($C_{max}$). Optymalny harmonogram to taki, który przy pełnym wykorzystaniu dostępnych zasobów (grup) i zachowaniu wszystkich więzów technologicznych, kończy cały proces w najkrótszym możliwym czasie. W notacji Grahama problem zapisujemy jako $P\,|\,prec\,|\,C_{max}$.
+\par\medskip\noindent
+\textbf{Zakres dokumentu.} Niniejsza dokumentacja końcowa stanowi rozszerzenie dokumentacji wstępnej. Opisuje ona finalną metodę i jej implementację (rozdz.~\ref{sec:metoda}--\ref{sec:implementacja}), pełny plan i wyniki eksperymentów numerycznych (rozdz.~\ref{sec:eksperymenty}--\ref{sec:wyniki}) oraz wnioski wraz z weryfikacją postawionych hipotez badawczych (rozdz.~\ref{sec:dyskusja}--\ref{sec:wnioski}).
+
+% =====================================================================
+\section{Metoda rozwiązania}
+\label{sec:metoda}
+% =====================================================================
+\textbf{Ogólna koncepcja.} W celu rozwiązania przedstawionego problemu zastosowano algorytm memetyczny~\cite{moscato1989}. Łączy on klasyczne dla algorytmów genetycznych globalne przeszukiwanie przestrzeni rozwiązań z optymalizacją lokalną opartą o analizę ścieżki krytycznej. Podejście to ma na celu zapobieganie powstawaniu wąskich gardeł w harmonogramach.
+
+\subsection{Reprezentacja osobnika}
+Do kodowania osobnika zastosowano reprezentację kolejności wykonywanych zadań. Chromosomem jest permutacja o długości $|T|$, zawierająca wszystkie zadania w kolejności priorytetu, z jakim będą umieszczane w harmonogramie. Reprezentacja ta nie zawiera bezpośredniego przydziału do grup -- przydział wynika z działania dekodera. Każda permutacja zgodna z porządkiem topologicznym koduje rozwiązanie dopuszczalne.
+
+\subsection{Dekoder (\textit{list scheduling})}
+W celu zamiany chromosomu na faktyczny harmonogram oraz wyliczenia czasu jego trwania zastosowano zachłanny dekoder typu \textit{list scheduling}~\cite{graham1969}. Ponieważ procesory są nierozróżnialne, dekoder po kolei przydziela wolnym jednostkom kolejne gotowe zadania (zgodnie z priorytetem z chromosomu), respektując relację pierwszeństwa~$p$. Wyliczona przez dekoder wartość $C_{max}$ stanowi wartość funkcji przystosowania. Dekoder udostępnia również pełny harmonogram (czasy rozpoczęcia/zakończenia oraz przydział do procesora każdego zadania), co jest wykorzystywane przez moduł optymalizacji lokalnej.
+
+\subsection{Naprawa dopuszczalności (\textit{ready-list repair})}
+Operatory krzyżowania i mutacji mogą wygenerować permutacje niezgodne z porządkiem topologicznym. Aby zapewnić, że każdy osobnik koduje rozwiązanie dopuszczalne, zastosowano mechanizm naprawy oparty o listę zadań gotowych: chromosom jest przebudowywany do najbliższego porządku topologicznego z zachowaniem względnej kolejności z oryginalnej permutacji. Dzięki temu cała populacja pozostaje dopuszczalna i nie jest konieczne karanie rozwiązań niedopuszczalnych w funkcji celu.
+
+\subsection{Operatory ewolucyjne}
+\begin{itemize}[itemsep=3pt, topsep=3pt]
+    \item \textbf{Selekcja:} selekcja turniejowa~\cite{miller1995}, mająca zapobiegać przedwczesnej dominacji pojedynczego osobnika.
+    \item \textbf{Krzyżowanie:} z uwagi na permutacyjny charakter reprezentacji zastosowano operatory unikające dublowania zadań w chromosomie. Porównano krzyżowanie porządkowe (Order Crossover, OX)~\cite{davis1985}, zachowujące względną kolejność zadań, z krzyżowaniem z częściowym mapowaniem (PMX)~\cite{goldberg1985}, opartym o mieszanie pozycyjne.
+    \item \textbf{Mutacja:} operator zamiany (\textit{swap}) -- losowa zamiana miejscami dwóch zadań w chromosomie.
+\end{itemize}
+
+\subsection{Optymalizacja lokalna (CPM)}
+Kluczowym elementem metody memetycznej jest moduł optymalizacji lokalnej oparty o analizę ścieżki krytycznej (\textit{ang. Critical Path Method})~\cite{kelley1959}. W odróżnieniu od klasycznej CPM liczonej wyłącznie na grafie zależności, zastosowano \textbf{analizę świadomą harmonogramu}: ścieżka krytyczna wyznaczana jest na faktycznie zdekodowanym harmonogramie, śledząc na każdym kroku poprzednika wynikającego z relacji pierwszeństwa \emph{lub} z zajętości procesora. Dzięki temu analiza wykrywa również wąskie gardła zasobowe i różni się między osobnikami. Zadania leżące na ścieżce krytycznej otrzymują wyższy priorytet (operacja typu \textit{pull-left}); jeśli taka modyfikacja poprawia $C_{max}$, zgodnie z ewolucją Lamarckowską~\cite{whitley1994} zastępuje ona poprzednika w populacji.
+
+\subsection{Konfiguracje algorytmu}
+Z połączenia dwóch operatorów krzyżowania (OX/PMX) oraz obecności bądź braku modułu CPM powstają cztery konfiguracje porównywane w eksperymentach: \texttt{ox}, \texttt{pmx} (czysty AE) oraz \texttt{ox\_cpm}, \texttt{pmx\_cpm} (pełny algorytm memetyczny).
+
+% =====================================================================
+\section{Implementacja}
+\label{sec:implementacja}
+% =====================================================================
+\textbf{Technologie.} Projekt zrealizowano w języku Python (wersja 3.10+), wykorzystując bibliotekę \textit{DEAP}~\cite{deap2012} jako szkielet algorytmu ewolucyjnego. Rozwiązania optymalne dla małych instancji wyznaczono solverem MILP (CBC) z pakietu \textit{PuLP}~\cite{mitchell2011}. Pozostałe komponenty oparto o standardowe biblioteki naukowe: \textit{NumPy}~\cite{harris2020}, \textit{Matplotlib}~\cite{hunter2007} oraz \textit{SciPy}~\cite{virtanen2020} (testy statystyczne).
+\par\medskip\noindent
+\textbf{Struktura repozytorium.} Najważniejsze moduły:
+\begin{itemize}[itemsep=2pt, topsep=3pt]
+    \item \texttt{src/core/} -- model dziedzinowy, dekoder \textit{list scheduling}, analiza CPM świadoma harmonogramu;
+    \item \texttt{src/data/} -- parser instancji STG (Kasahara Lab) oraz generator grafów syntetycznych;
+    \item \texttt{src/solvers/evolutionary/} -- algorytm memetyczny (operatory, strategie, lokalne przeszukiwanie CPM);
+    \item \texttt{src/solvers/heuristics.py} -- heurystyki listowe HLFET i MCP;
+    \item \texttt{src/solvers/milp.py} -- dokładny model MILP (czasowo-indeksowany $P\,|\,prec\,|\,C_{max}$);
+    \item \texttt{src/experiments/} -- runner kampanii eksperymentalnej, analiza statystyczna i wykresy.
+\end{itemize}
+\par\medskip\noindent
+\textbf{Powtarzalność.} Ustalono ziarna generatora liczb losowych, a środowisko (wersje bibliotek) udokumentowano w pliku \texttt{requirements.txt}. Pełną kampanię odtwarza się poleceniami:
+\begin{lstlisting}[language=bash]
+python -m src.experiments.run_experiments   # surowe wyniki + krzywe zbieznosci
+python -m src.experiments.analyze           # podsumowanie + testy Wilcoxona (H1/H2)
+python -m src.experiments.plots             # wykresy pudelkowe i krzywe zbieznosci
+\end{lstlisting}
+
+\todo{ewentualnie dodać krótki opis najciekawszych decyzji implementacyjnych / problemów napotkanych w trakcie (np. naprawa CPM świadomej harmonogramu, kara za niedopuszczalność jako martwy kod).}
+
+% =====================================================================
+\section{Plan eksperymentów numerycznych}
+\label{sec:eksperymenty}
+% =====================================================================
+\textbf{Cel i hipotezy badawcze.} Celem eksperymentów jest ocena jakości rozwiązań zaproponowanego algorytmu oraz weryfikacja dwóch hipotez badawczych:
+\begin{itemize}[itemsep=1pt, topsep=2pt, leftmargin=3em]
+    \item[(H1)] lokalna optymalizacja CPM istotnie obniża medianę $C_{max}$ względem czystego AE;
+    \item[(H2)] krzyżowanie OX istotnie dominuje nad PMX na grafach rzadkich ($|E|/|T|^2 < 0{,}1$).
+\end{itemize}
+\par\medskip\noindent
+\textbf{Zestawy testowe.} Jako instancje testowe posłużyły grafy ze zbioru \textit{Standard Task Graph Set} (Kasahara Lab)~\cite{tobita2002} oraz grafy generowane syntetycznie z kontrolowaną liczbą zadań i gęstością. Dla małych instancji ($|T| \leq 30$) wyznaczono rozwiązanie optymalne solverem MILP w celu raportowania luki optymalizacyjnej; dla większych instancji odniesieniem jest dolne ograniczenie $LB = \max(\lceil \text{całkowita praca}/M \rceil,\ \text{ścieżka krytyczna})$.
+\par\medskip\noindent
+\textbf{Protokół statystyczny.} Dla każdej konfiguracji wykonano co najmniej 30 niezależnych uruchomień (10 dla dwóch największych instancji ze względów obliczeniowych). Miarą jakości jest najlepszy $C_{max}$ na uruchomienie; tabele raportują medianę. Istotność różnic weryfikowano sparowanym testem kolejności rangowanej Wilcoxona~\cite{wilcoxon1945} (te same ziarna), z korekcją Holma w obrębie każdej rodziny hipotez, $\alpha = 0{,}05$.
+\par\medskip\noindent
+\textbf{Baseline'y i ablacje.} Podejście zestawiono z klasycznymi heurystykami listowymi HLFET~\cite{adam1974} oraz MCP~\cite{wu1990}, a także z czystym AE pozbawionym komponentu lokalnego.
+
+\paragraph{Zastrzeżenie dot. budżetu (H1).} Konfiguracje memetyczne wykonują dodatkowe ewaluacje funkcji celu wewnątrz lokalnego przeszukiwania CPM, dlatego porównanie prowadzone jest przy równej liczbie \emph{pokoleń}, a nie przy równym budżecie ewaluacji. Przewaga CPM jest zatem częściowo skutkiem większego efektywnego nakładu obliczeniowego na pokolenie. \todo{ewentualne porównanie przy równym budżecie ewaluacji -- jeśli zostanie wykonane.}
+
+\paragraph{Hiperparametry.} \todo{uzupełnić finalne wartości: rozmiar populacji, liczba pokoleń, $p_c$, $p_m$, rozmiar turnieju. Opisać ewentualne ablacje hiperparametrów lub zaznaczyć, że nie były przeprowadzone.}
+
+% =====================================================================
+\section{Wyniki}
+\label{sec:wyniki}
+% =====================================================================
+\todo{Cały rozdział do finalizacji po ostatecznym przebiegu kampanii. Liczby poniżej pochodzą z bieżącego przebiegu i należy je potwierdzić/odświeżyć. Źródła: \texttt{results/campaign/summary.csv}, \texttt{h1\_wilcoxon.csv}, \texttt{h2\_wilcoxon.csv} oraz \texttt{RESULTS.md}.}
+
+\subsection{Charakterystyka instancji}
+\todo{Wstawić finalną tabelę instancji: rozmiar, liczba krawędzi, gęstość, $M$, HLFET, MCP, optimum MILP (jeśli dostępne), dolne ograniczenie LB. Wzorzec poniżej.}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+instancja & $|T|$ & $|E|$ & gęstość & $M$ & ref. ($C_{max}$) \\
+\midrule
+small\_15 & 17 & 31 & 0{,}107 & 2 & 52 (MILP) \\
+small\_22 & 24 & 48 & 0{,}083 & 3 & 44 (MILP) \\
+\todo{\dots} & & & & & \\
+\bottomrule
+\end{tabular}
+\caption{Charakterystyka instancji testowych. \todo{uzupełnić pełny zestaw}}
+\label{tab:instances}
+\end{table}
+
+\subsection{Jakość rozwiązań -- mediana $C_{max}$ wg konfiguracji}
+\todo{Wstawić finalną tabelę mediany $C_{max}$ dla czterech konfiguracji (ox / pmx / ox\_cpm / pmx\_cpm) wraz z luką do odniesienia. Najlepszą konfigurację na instancję zaznaczyć pogrubieniem.}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+instancja & ref. & ox & pmx & ox\_cpm & pmx\_cpm \\
+\midrule
+\todo{\dots} & & & & & \\
+\bottomrule
+\end{tabular}
+\caption{Mediana $C_{max}$ według konfiguracji. \todo{uzupełnić}}
+\label{tab:cmax}
+\end{table}
+
+\subsection{Weryfikacja H1 -- wpływ optymalizacji CPM}
+\todo{Wstawić finalną tabelę testów Wilcoxona CPM-on vs CPM-off (per krzyżowanie, per instancja), z $\Delta$ mediany i skorygowaną $p$. Skomentować werdykt.}
+
+\subsection{Weryfikacja H2 -- OX vs PMX na grafach rzadkich}
+\todo{Wstawić finalną tabelę testów Wilcoxona OX vs PMX (czysty AE), z podziałem na grafy rzadkie/gęste. Skomentować werdykt.}
+
+\subsection{Wykresy}
+\todo{Wstawić wykresy pudełkowe $C_{max}$ oraz krzywe zbieżności dla reprezentatywnych instancji z katalogu \texttt{results/campaign/plots/}. Przykładowy szkielet poniżej.}
+
+% \begin{figure}[h]
+%   \centering
+%   \includegraphics[width=0.49\textwidth]{../../results/campaign/plots/random_300_boxplot.png}
+%   \includegraphics[width=0.49\textwidth]{../../results/campaign/plots/random_300_convergence.png}
+%   \caption{random_300: wykres pudełkowy oraz krzywa zbieżności.}
+%   \label{fig:random300}
+% \end{figure}
+
+% =====================================================================
+\section{Dyskusja}
+\label{sec:dyskusja}
+% =====================================================================
+\todo{Do finalizacji. Punkty do omówienia (na podstawie bieżących wyników -- potwierdzić):}
+\begin{itemize}[itemsep=2pt, topsep=3pt]
+    \item \textbf{H1} -- wstępnie potwierdzona: CPM istotnie obniża $C_{max}$ wszędzie tam, gdzie istnieje zapas (z zastrzeżeniem dot. budżetu pokoleń); efekt rośnie z trudnością instancji. \todo{potwierdzić finalnymi liczbami.}
+    \item \textbf{H2} -- wstępnie odrzucona, zachodzi relacja przeciwna: PMX istotnie dominuje nad OX na grafach rzadkich. Prawdopodobna przyczyna: naprawa listy gotowych już wymusza pierwszeństwo, więc przewaga OX w zachowaniu kolejności jest stłumiona, podczas gdy pozycyjne mieszanie PMX skuteczniej eksploruje przestrzeń priorytetów. \todo{potwierdzić finalnymi liczbami.}
+    \item Algorytm memetyczny pokonuje heurystyki listowe HLFET/MCP na każdej instancji; pozostała luka do dolnego ograniczenia. \todo{podać finalne wartości luk.}
+    \item Ograniczenia metody i zagrożenia trafności (brak elityzmu, porównanie przy równej liczbie pokoleń, dobór instancji). \todo{rozwinąć.}
+\end{itemize}
+
+% =====================================================================
+\section{Wnioski}
+\label{sec:wnioski}
+% =====================================================================
+\todo{Do finalizacji po zatwierdzeniu wyników. Podsumować: najlepsza konfiguracja (wstępnie \texttt{pmx\_cpm}), werdykty H1/H2, przewaga nad baseline'ami, kierunki dalszych prac (ablacje hiperparametrów, elityzm, porównanie przy równym budżecie ewaluacji).}
+
+% =====================================================================
+\begin{thebibliography}{99}
+
+\bibitem{moscato1989}
+P.~Moscato,
+\textit{On Evolution, Search, Optimization, Genetic Algorithms and Martial Arts: Towards Memetic Algorithms},
+Caltech Concurrent Computation Program, Report C3P 826, 1989.
+
+\bibitem{graham1969}
+R.~L. Graham,
+\textit{Bounds on multiprocessing timing anomalies},
+SIAM Journal on Applied Mathematics, vol.~17, no.~2, pp.~416--429, 1969.
+
+\bibitem{davis1985}
+L.~Davis,
+\textit{Applying adaptive algorithms to epistatic domains},
+w: Proc. of the 9th International Joint Conference on Artificial Intelligence (IJCAI), pp.~162--164, 1985.
+
+\bibitem{goldberg1985}
+D.~E. Goldberg, R.~Lingle,
+\textit{Alleles, loci, and the traveling salesman problem},
+w: Proc. of the 1st International Conference on Genetic Algorithms, pp.~154--159, 1985.
+
+\bibitem{kelley1959}
+J.~E. Kelley, M.~R. Walker,
+\textit{Critical-path planning and scheduling},
+w: Proc. of the Eastern Joint Computer Conference, pp.~160--173, 1959.
+
+\bibitem{tobita2002}
+T.~Tobita, H.~Kasahara,
+\textit{A standard task graph set for fair evaluation of multiprocessor scheduling algorithms},
+Journal of Scheduling, vol.~5, no.~5, pp.~379--394, 2002.
+\url{https://www.kasahara.cs.waseda.ac.jp/schedule/}
+
+\bibitem{adam1974}
+T.~L. Adam, K.~M. Chandy, J.~R. Dickson,
+\textit{A comparison of list schedules for parallel processing systems},
+Communications of the ACM, vol.~17, no.~12, pp.~685--690, 1974.
+
+\bibitem{wu1990}
+M.-Y. Wu, D.~D. Gajski,
+\textit{Hypertool: A programming aid for message-passing systems},
+IEEE Transactions on Parallel and Distributed Systems, vol.~1, no.~3, pp.~330--343, 1990.
+
+\bibitem{wilcoxon1945}
+F.~Wilcoxon,
+\textit{Individual comparisons by ranking methods},
+Biometrics Bulletin, vol.~1, no.~6, pp.~80--83, 1945.
+
+\bibitem{deap2012}
+F.-A. Fortin, F.-M. De~Rainville, M.-A. Gardner, M.~Parizeau, C.~Gagné,
+\textit{DEAP: Evolutionary algorithms made easy},
+Journal of Machine Learning Research, vol.~13, pp.~2171--2175, 2012.
+
+\bibitem{ullman1975}
+J.~D. Ullman,
+\textit{NP-complete scheduling problems},
+Journal of Computer and System Sciences, vol.~10, no.~3, pp.~384--393, 1975.
+
+\bibitem{miller1995}
+B.~L. Miller, D.~E. Goldberg,
+\textit{Genetic algorithms, tournament selection, and the effects of noise},
+Complex Systems, vol.~9, no.~3, pp.~193--212, 1995.
+
+\bibitem{whitley1994}
+D.~Whitley, V.~S. Gordon, K.~Mathias,
+\textit{Lamarckian evolution, the Baldwin effect and function optimization},
+w: Parallel Problem Solving from Nature (PPSN III), LNCS 866, Springer, pp.~6--15, 1994.
+
+\bibitem{harris2020}
+C.~R. Harris \textit{et al.},
+\textit{Array programming with NumPy},
+Nature, vol.~585, no.~7825, pp.~357--362, 2020.
+
+\bibitem{hunter2007}
+J.~D. Hunter,
+\textit{Matplotlib: A 2D graphics environment},
+Computing in Science \& Engineering, vol.~9, no.~3, pp.~90--95, 2007.
+
+\bibitem{virtanen2020}
+P.~Virtanen \textit{et al.},
+\textit{SciPy 1.0: Fundamental algorithms for scientific computing in Python},
+Nature Methods, vol.~17, pp.~261--272, 2020.
+
+\bibitem{mitchell2011}
+S.~Mitchell, M.~O'Sullivan, I.~Dunning,
+\textit{PuLP: A linear programming toolkit for Python},
+Technical report, University of Auckland, 2011.
+\url{https://github.com/coin-or/pulp}
+
+\end{thebibliography}
+
+\end{document}
