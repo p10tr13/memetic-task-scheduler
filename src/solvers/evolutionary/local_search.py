@@ -89,8 +89,11 @@ def cpm_local_search(
 ) -> list[int]:
     """Improves a permutation by pulling schedule-critical tasks left.
 
-    Critical tasks are recomputed from the current schedule on every attempt, so
-    the search follows the bottlenecks of the evolving schedule.
+    Critical tasks are recomputed from the current schedule whenever it changes,
+    so the search follows the bottlenecks of the evolving schedule. The set
+    depends only on the current permutation, so it is reused across rejected
+    attempts (which leave the permutation unchanged) and refreshed only after an
+    accepted move - identical results, far fewer decodes.
 
     Args:
         problem_instance: Scheduling problem instance.
@@ -108,8 +111,8 @@ def cpm_local_search(
     if max_attempts <= 0:
         return current_permutation
 
+    critical_tasks = _movable_critical_tasks(problem_instance, current_permutation)
     for _ in range(max_attempts):
-        critical_tasks = _movable_critical_tasks(problem_instance, current_permutation)
         if not critical_tasks:
             break
 
@@ -135,6 +138,9 @@ def cpm_local_search(
         if new_cmax <= current_cmax:
             current_permutation = mutant
             current_cmax = new_cmax
+            critical_tasks = _movable_critical_tasks(
+                problem_instance, current_permutation
+            )
 
     return current_permutation
 
