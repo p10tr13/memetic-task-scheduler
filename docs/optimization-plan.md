@@ -215,9 +215,14 @@ per-cell times. Fixed by:
   `per_seed_seconds`/`total_seconds`/`mean_seconds` stay wall (back-compat), plus new
   `*_cpu_seconds`. `schema_version` → 2. Under the same 8-way test, **wall inflated +69% but CPU
   only +30%** — CPU time is the parallelism-robust per-cell cost metric.
-- **`run_campaign`** now writes `campaign_timing.json` (end-to-end `wall_seconds`, plus
-  `baselines_wall_seconds`/`cells_wall_seconds`, `jobs`, `cells_run`) — the real throughput
-  number, and `jobs` flags whether per-cell wall times were isolated.
+- **Per-run times are saved per cell**: each `runs/<instance>__<label>/timing.json` is the
+  isolated, authoritative per-run record (wall + cpu per seed); re-running one cell touches only
+  that cell.
+- **`run_campaign`** also writes a per-invocation `campaign_timing_<UTC stamp>.json` (end-to-end
+  `wall_seconds`, plus `baselines_wall_seconds`/`cells_wall_seconds`, `jobs`, `cells_run`) — the
+  real throughput number, and `jobs` flags whether per-cell wall times were isolated. The
+  timestamped name means resuming/re-running in the same campaign dir never clobbers an earlier
+  run's timing, matching the per-cell "nothing shares a single clobberable file" layout.
 - **Caveat:** the residual +30% CPU inflation is Apple-Silicon frequency throttling / E-core
   scheduling under all-core load; no in-process clock removes it. **For wall-clock per-cell cost
   claims, run with `--jobs 1`.** Parallel runs are for throughput; trust `*_cpu_seconds` for

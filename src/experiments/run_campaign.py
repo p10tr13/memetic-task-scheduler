@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> None:
         f"Campaign: {len(instances)} instances x {len(METHODS)} methods -> {campaign}"
     )
 
-    started_utc = datetime.now(timezone.utc).isoformat()
+    started = datetime.now(timezone.utc)
     wall_start = time.perf_counter()
 
     if not args.no_baselines:
@@ -63,9 +63,10 @@ def main(argv: list[str] | None = None) -> None:
 
     _write_campaign_timing(
         campaign,
+        started,
         {
             "schema_version": CAMPAIGN_SCHEMA_VERSION,
-            "started_utc": started_utc,
+            "started_utc": started.isoformat(),
             "jobs": args.jobs,
             "cells_run": len(pending),
             "wall_seconds": round(time.perf_counter() - wall_start, 4),
@@ -187,14 +188,19 @@ def _cell_exists(campaign, instance: str, method: dict) -> bool:
     return (layout.cell_dir(campaign, instance, label) / "config.json").exists()
 
 
-def _write_campaign_timing(campaign, timing: dict) -> None:
-    """Writes the campaign-level wall-clock timing.
+def _write_campaign_timing(campaign, started: datetime, timing: dict) -> None:
+    """Writes the campaign-level wall-clock timing for this invocation.
 
     This is the real end-to-end cost under ``--jobs`` parallelism; per-cell
     ``timing.json`` wall times are inflated by contention when jobs > 1, so the
     recorded ``jobs`` says whether those per-cell wall times are isolated.
+
+    The file is named per invocation (``campaign_timing_<UTC stamp>.json``) so
+    resuming or re-running a campaign in the same directory never overwrites an
+    earlier run's timing, matching the per-cell "nothing clobbers" layout.
     """
-    layout.write_json(campaign / "campaign_timing.json", timing)
+    stamp = started.strftime("%Y%m%d_%H%M%S")
+    layout.write_json(campaign / f"campaign_timing_{stamp}.json", timing)
 
 
 def _report(campaign, failures: list[str]) -> None:
