@@ -1,7 +1,7 @@
-"""Statistical analysis of the experiment campaign.
+"""Statistical analysis of an experiment campaign.
 
-Reads the raw ``runs.csv`` / ``baselines.csv`` written by ``run_experiments`` and
-produces:
+Reads the per-cell ``runs.csv`` and per-instance ``baselines/*.json`` written
+under a campaign directory and produces:
 
 - ``summary.csv`` — best/mean/median/std and the optimality gap per
   instance x configuration (gap vs the MILP optimum where proven, otherwise vs
@@ -11,9 +11,9 @@ produces:
 - ``h2_wilcoxon.csv`` — paired Wilcoxon tests of OX vs PMX (pure EA, per
   instance), Holm-corrected, testing hypothesis H2 with sparse/dense labels.
 
-Run from the repository root after ``run_experiments``::
+Run from the repository root, pointing at a campaign directory::
 
-    python -m src.experiments.analyze
+    python -m src.experiments.analyze --campaign results/0607_1105
 """
 
 import argparse
@@ -23,8 +23,8 @@ from pathlib import Path
 
 from scipy.stats import wilcoxon
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DIR = REPOSITORY_ROOT / "results" / "campaign"
+from src.experiments import layout
+
 SIGNIFICANCE_LEVEL = 0.05
 SPARSE_DENSITY_THRESHOLD = 0.1
 
@@ -64,30 +64,37 @@ H2_FIELDS = [
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Analyses the campaign CSVs and writes summary and hypothesis tables."""
+    """Analyses a campaign directory and writes summary and hypothesis tables."""
     arguments = _parse_arguments(argv)
-    runs = _load_runs(arguments.input_dir / "runs.csv")
-    baselines = _load_baselines(arguments.input_dir / "baselines.csv")
+    campaign = arguments.campaign
+    runs = _load_runs(campaign)
+    baselines = _load_baselines(campaign)
 
     summary_rows = _summary_rows(runs, baselines)
     h1_rows = _h1_rows(runs)
     h2_rows = _h2_rows(runs, baselines)
 
-    _write_csv(arguments.input_dir / "summary.csv", SUMMARY_FIELDS, summary_rows)
-    _write_csv(arguments.input_dir / "h1_wilcoxon.csv", H1_FIELDS, h1_rows)
-    _write_csv(arguments.input_dir / "h2_wilcoxon.csv", H2_FIELDS, h2_rows)
+    layout.write_csv(campaign / "summary.csv", SUMMARY_FIELDS, summary_rows)
+    layout.write_csv(campaign / "h1_wilcoxon.csv", H1_FIELDS, h1_rows)
+    layout.write_csv(campaign / "h2_wilcoxon.csv", H2_FIELDS, h2_rows)
 
     _print_overview(h1_rows, h2_rows)
-    print(f"Wrote summary/h1_wilcoxon/h2_wilcoxon to {arguments.input_dir}")
+    print(f"Wrote summary/h1_wilcoxon/h2_wilcoxon to {campaign}")
 
 
-def _load_runs(path: Path) -> dict[tuple[str, str], list[int]]:
-    """Loads best makespans keyed by (instance, config), ordered by seed."""
+def _load_runs(campaign: Path) -> dict[tuple[str, str], list[int]]:
+    """Loads best makespans keyed by (instance, config), ordered by seed.
+
+    Walks every ``runs/<instance>__<label>/runs.csv`` cell in the campaign.
+    """
     grouped: dict[tuple[str, str], dict[int, int]] = {}
-    with path.open(encoding="utf-8") as runs_file:
-        for row in csv.DictReader(runs_file):
-            key = (row["instance"], row["config"])
-            grouped.setdefault(key, {})[int(row["seed"])] = int(row["best_makespan"])
+    for runs_csv in sorted(layout.runs_dir(campaign).glob("*/runs.csv")):
+        with runs_csv.open(encoding="utf-8") as runs_file:
+            for row in csv.DictReader(runs_file):
+                key = (row["instance"], row["config"])
+                grouped.setdefault(key, {})[int(row["seed"])] = int(
+                    row["best_makespan"]
+                )
 
     return {
         key: [makespans[seed] for seed in sorted(makespans)]
@@ -95,10 +102,13 @@ def _load_runs(path: Path) -> dict[tuple[str, str], list[int]]:
     }
 
 
-def _load_baselines(path: Path) -> dict[str, dict]:
-    """Loads the baseline row per instance."""
-    with path.open(encoding="utf-8") as baselines_file:
-        return {row["instance"]: row for row in csv.DictReader(baselines_file)}
+def _load_baselines(campaign: Path) -> dict[str, dict]:
+    """Loads the baseline payload per instance from ``baselines/*.json``."""
+    baselines: dict[str, dict] = {}
+    for path in sorted(layout.baselines_dir(campaign).glob("*.json")):
+        row = layout.read_json(path)
+        baselines[row["instance"]] = row
+    return baselines
 
 
 def _instances_in_order(runs: dict[tuple[str, str], list[int]]) -> list[str]:
@@ -137,7 +147,10 @@ def _summary_rows(
 
 def _reference(baseline_row: dict) -> tuple[int, str]:
     """Returns the reference makespan and its kind (MILP optimum or bound)."""
-    if baseline_row.get("milp_is_optimal") == "True" and baseline_row["milp_makespan"]:
+    if (
+        baseline_row.get("milp_is_optimal")
+        and baseline_row.get("milp_makespan") is not None
+    ):
         return int(baseline_row["milp_makespan"]), "milp"
     return int(baseline_row["lower_bound"]), "lower_bound"
 
@@ -268,23 +281,10 @@ def _print_overview(h1_rows: list[dict], h2_rows: list[dict]) -> None:
     )
 
 
-def _write_csv(path: Path, fieldnames: list[str], rows: list[dict]) -> None:
-    """Writes rows to a CSV file with the given header."""
-    with path.open("w", newline="", encoding="utf-8") as csv_file:
-        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     """Parses command-line arguments."""
     parser = argparse.ArgumentParser(description="Analyse the experiment campaign.")
-    parser.add_argument(
-        "--input-dir",
-        type=Path,
-        default=DEFAULT_DIR,
-        help="Directory containing runs.csv and baselines.csv.",
-    )
+    layout.add_campaign_args(parser, required=True)
     return parser.parse_args(argv)
 
 

@@ -1,12 +1,13 @@
-"""Plots for the experiment campaign.
+"""Plots for an experiment campaign.
 
-Reads ``runs.csv`` and ``convergence.csv`` written by ``run_experiments`` and
-saves, per instance, a boxplot of best ``C_max`` across configurations and a mean
-convergence curve. Figures are written to ``<input-dir>/plots``.
+Reads the per-cell ``runs.csv`` and ``convergence.csv`` under a campaign
+directory and saves, per instance, a boxplot of best ``C_max`` across
+configurations and a mean convergence curve. Figures are written to
+``<campaign>/plots``.
 
-Run from the repository root after ``run_experiments``::
+Run from the repository root, pointing at a campaign directory::
 
-    python -m src.experiments.plots
+    python -m src.experiments.plots --campaign results/0607_1105
 """
 
 import argparse
@@ -15,8 +16,8 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DIR = REPOSITORY_ROOT / "results" / "campaign"
+from src.experiments import layout
+
 CONFIG_ORDER = ("ox", "pmx", "ox_cpm", "pmx_cpm")
 
 
@@ -24,11 +25,12 @@ def main(argv: list[str] | None = None) -> None:
     """Generates boxplot and convergence figures for every instance."""
     arguments = _parse_arguments(argv)
     plt.switch_backend("Agg")
-    plots_dir = arguments.input_dir / "plots"
+    campaign = arguments.campaign
+    plots_dir = campaign / "plots"
     plots_dir.mkdir(parents=True, exist_ok=True)
 
-    best_makespans = _load_runs(arguments.input_dir / "runs.csv")
-    convergence = _load_convergence(arguments.input_dir / "convergence.csv")
+    best_makespans = _load_runs(campaign)
+    convergence = _load_convergence(campaign)
 
     for instance, config_values in best_makespans.items():
         _plot_boxplot(instance, config_values, plots_dir / f"{instance}_boxplot.png")
@@ -41,28 +43,38 @@ def main(argv: list[str] | None = None) -> None:
     print(f"Wrote {figure_count} figures to {plots_dir}")
 
 
-def _load_runs(path: Path) -> dict[str, dict[str, list[int]]]:
+def _load_runs(campaign: Path) -> dict[str, dict[str, list[int]]]:
     """Loads best makespans grouped by instance then configuration."""
     grouped: dict[str, dict[str, list[int]]] = {}
-    with path.open(encoding="utf-8") as runs_file:
-        for row in csv.DictReader(runs_file):
-            instance = grouped.setdefault(row["instance"], {})
-            instance.setdefault(row["config"], []).append(int(row["best_makespan"]))
+    for runs_csv in sorted(layout.runs_dir(campaign).glob("*/runs.csv")):
+        with runs_csv.open(encoding="utf-8") as runs_file:
+            for row in csv.DictReader(runs_file):
+                instance = grouped.setdefault(row["instance"], {})
+                instance.setdefault(row["config"], []).append(int(row["best_makespan"]))
     return grouped
 
 
-def _load_convergence(path: Path) -> dict[str, dict[str, list[float]]]:
-    """Loads mean convergence curves grouped by instance then configuration."""
-    indexed: dict[str, dict[str, dict[int, float]]] = {}
-    with path.open(encoding="utf-8") as convergence_file:
-        for row in csv.DictReader(convergence_file):
-            instance = indexed.setdefault(row["instance"], {})
-            config = instance.setdefault(row["config"], {})
-            config[int(row["generation"])] = float(row["mean_best_makespan"])
+def _load_convergence(campaign: Path) -> dict[str, dict[str, list[float]]]:
+    """Loads convergence curves averaged across seeds, per instance and config.
+
+    Reads the raw per-seed ``convergence.csv`` cells and averages the best
+    makespan across seeds at each generation.
+    """
+    indexed: dict[str, dict[str, dict[int, list[int]]]] = {}
+    for conv_csv in sorted(layout.runs_dir(campaign).glob("*/convergence.csv")):
+        with conv_csv.open(encoding="utf-8") as convergence_file:
+            for row in csv.DictReader(convergence_file):
+                instance = indexed.setdefault(row["instance"], {})
+                config = instance.setdefault(row["config"], {})
+                generation = config.setdefault(int(row["generation"]), [])
+                generation.append(int(row["best_makespan"]))
 
     return {
         instance: {
-            config: [values[generation] for generation in sorted(values)]
+            config: [
+                sum(values[generation]) / len(values[generation])
+                for generation in sorted(values)
+            ]
             for config, values in configs.items()
         }
         for instance, configs in indexed.items()
@@ -113,12 +125,7 @@ def _plot_convergence(
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     """Parses command-line arguments."""
     parser = argparse.ArgumentParser(description="Plot the experiment campaign.")
-    parser.add_argument(
-        "--input-dir",
-        type=Path,
-        default=DEFAULT_DIR,
-        help="Directory containing runs.csv and convergence.csv.",
-    )
+    layout.add_campaign_args(parser, required=True)
     return parser.parse_args(argv)
 
 

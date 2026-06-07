@@ -1,10 +1,10 @@
-"""Tests for the experiment-runner helpers."""
+"""Tests for the baseline-step helpers."""
 
 import networkx as nx
 import numpy as np
 
 from src.core.models import ProblemInstance
-from src.experiments.run_experiments import _lower_bound
+from src.experiments.run_baselines import _lower_bound
 
 
 def test_lower_bound_uses_critical_path_when_it_dominates() -> None:
