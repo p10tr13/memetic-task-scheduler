@@ -1,11 +1,34 @@
 """Critical Path Method utilities for task graphs."""
 
+import weakref
 from collections.abc import Sequence
 
 import networkx as nx
 
 from src.core.decoder import Schedule, compute_schedule
-from src.core.models import ProblemInstance
+from src.core.models import ProblemInstance, predecessors_map
+
+# Graphs already confirmed acyclic. The acyclicity check is O(V+E) and the graph
+# never changes during a run, so it is hoisted out of the per-call hot path and
+# done once per graph object. A WeakSet avoids leaking graphs and avoids id()
+# reuse hazards. Cyclic graphs are never added, so they still raise every call.
+_VALIDATED_DAGS: "weakref.WeakSet[nx.DiGraph]" = weakref.WeakSet()
+
+
+def _ensure_acyclic(graph: nx.DiGraph) -> None:
+    """Validates graph acyclicity once per graph object.
+
+    Args:
+        graph: Precedence graph to validate.
+
+    Raises:
+        ValueError: If the graph is not a directed acyclic graph.
+    """
+    if graph in _VALIDATED_DAGS:
+        return
+    if not nx.is_directed_acyclic_graph(graph):
+        raise ValueError("CPM requires a directed acyclic graph.")
+    _VALIDATED_DAGS.add(graph)
 
 
 def identify_critical_tasks(
@@ -31,10 +54,9 @@ def identify_critical_tasks(
     Raises:
         ValueError: If the graph is cyclic, or the permutation/times are invalid.
     """
-    if not nx.is_directed_acyclic_graph(problem_instance.priority_relationship):
-        raise ValueError("CPM requires a directed acyclic graph.")
+    _ensure_acyclic(problem_instance.priority_relationship)
 
-    schedule = compute_schedule(task_permutation, problem_instance)
+    schedule = compute_schedule(task_permutation, problem_instance, validate=False)
     critical_tasks: set[int] = set()
     pending = [
         task_number
@@ -77,9 +99,8 @@ def _binding_predecessors(
         return []
 
     binding_predecessors = []
-    for predecessor_number in problem_instance.priority_relationship.predecessors(
-        task_number
-    ):
+    predecessors = predecessors_map(problem_instance.priority_relationship)
+    for predecessor_number in predecessors[task_number]:
         if schedule.finish_times[predecessor_number] == start_time:
             binding_predecessors.append(predecessor_number)
 

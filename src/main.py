@@ -36,7 +36,7 @@ def main() -> None:
     and EA makespans are reported alongside their gap to the optimum.
     """
     repository_root = Path(__file__).resolve().parents[1]
-    instance_path = repository_root / "data" / "sample" / "small.stg"
+    instance_path = repository_root / "data" / "example.stg"
     problem_instance = replace(
         parse_stg_file(instance_path),
         number_of_groups=2,

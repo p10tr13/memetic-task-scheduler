@@ -1,7 +1,9 @@
 ﻿black
 deap
+matplotlib
 networkx
 numpy
 pulp
 pylint
 pytest
+scipy
