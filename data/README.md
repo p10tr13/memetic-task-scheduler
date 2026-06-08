@@ -8,7 +8,7 @@ header with metadata follows). All graphs are the **zero-communication** model
 
 ```
 data/
-├── example.stg     # tiny hand-authored DAG for the MILP demo / run_partial
+├── example.stg     # tiny hand-authored DAG for the MILP demo (src.main)
 ├── optima.csv      # published optimal/best-known makespans for the Kasahara graphs
 ├── kasahara/       # 10 real Kasahara STG graphs (downloads)
 └── synthetic/      # 10 generated synthetic graphs (make data)
@@ -81,5 +81,4 @@ density requested from the generator.
 
 A tiny hand-authored DAG (12 real tasks + 2 dummies) kept at the data root. Small
 enough to solve to proven optimality with the MILP solver, so it drives the
-`python -m src.main` optimality-gap demo and `src/experiments/run_partial.py`. Not
-part of the campaign set.
+`python -m src.main` optimality-gap demo. Not part of the campaign set.

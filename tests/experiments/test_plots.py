@@ -15,10 +15,34 @@ def test_ordered_configs_uses_canonical_order_and_drops_unknown() -> None:
 def test_load_convergence_averages_across_seeds(tmp_path) -> None:
     campaign = tmp_path / "camp"
     rows = [
-        {"instance": "inst", "config": "ox", "seed": 0, "generation": 0, "best_makespan": 10},
-        {"instance": "inst", "config": "ox", "seed": 0, "generation": 1, "best_makespan": 8},
-        {"instance": "inst", "config": "ox", "seed": 1, "generation": 0, "best_makespan": 12},
-        {"instance": "inst", "config": "ox", "seed": 1, "generation": 1, "best_makespan": 6},
+        {
+            "instance": "inst",
+            "config": "ox",
+            "seed": 0,
+            "generation": 0,
+            "best_makespan": 10,
+        },
+        {
+            "instance": "inst",
+            "config": "ox",
+            "seed": 0,
+            "generation": 1,
+            "best_makespan": 8,
+        },
+        {
+            "instance": "inst",
+            "config": "ox",
+            "seed": 1,
+            "generation": 0,
+            "best_makespan": 12,
+        },
+        {
+            "instance": "inst",
+            "config": "ox",
+            "seed": 1,
+            "generation": 1,
+            "best_makespan": 6,
+        },
     ]
     layout.write_csv(
         layout.cell_dir(campaign, "inst", "ox") / "convergence.csv",
