@@ -3,6 +3,9 @@ install:
 	pip install black pylint
 	if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+data:
+	python -m scripts.build_data
+
 format:
 	black src/
 

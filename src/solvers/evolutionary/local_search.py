@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 from src.core.cpm_utils import identify_critical_tasks
 from src.core.decoder import calculate_makespan
-from src.core.models import ProblemInstance
+from src.core.models import ProblemInstance, predecessors_map
 
 
 def get_left_boundary(
@@ -34,8 +34,9 @@ def get_left_boundary(
     if task_id not in task_indices:
         raise ValueError(f"Task {task_id} is missing from the permutation.")
 
+    predecessors = predecessors_map(problem_instance.priority_relationship)
     predecessor_indices = []
-    for predecessor_id in problem_instance.priority_relationship.predecessors(task_id):
+    for predecessor_id in predecessors[task_id]:
         if predecessor_id not in task_indices:
             raise ValueError(
                 f"Predecessor {predecessor_id} is missing from the permutation."
@@ -88,8 +89,11 @@ def cpm_local_search(
 ) -> list[int]:
     """Improves a permutation by pulling schedule-critical tasks left.
 
-    Critical tasks are recomputed from the current schedule on every attempt, so
-    the search follows the bottlenecks of the evolving schedule.
+    Critical tasks are recomputed from the current schedule whenever it changes,
+    so the search follows the bottlenecks of the evolving schedule. The set
+    depends only on the current permutation, so it is reused across rejected
+    attempts (which leave the permutation unchanged) and refreshed only after an
+    accepted move - identical results, far fewer decodes.
 
     Args:
         problem_instance: Scheduling problem instance.
@@ -100,13 +104,15 @@ def cpm_local_search(
         Final task order after accepted local search moves.
     """
     current_permutation = list(task_permutation)
-    current_cmax = calculate_makespan(current_permutation, problem_instance)
+    current_cmax = calculate_makespan(
+        current_permutation, problem_instance, validate=False
+    )
 
     if max_attempts <= 0:
         return current_permutation
 
+    critical_tasks = _movable_critical_tasks(problem_instance, current_permutation)
     for _ in range(max_attempts):
-        critical_tasks = _movable_critical_tasks(problem_instance, current_permutation)
         if not critical_tasks:
             break
 
@@ -127,11 +133,14 @@ def cpm_local_search(
             task_id,
             target_index,
         )
-        new_cmax = calculate_makespan(mutant, problem_instance)
+        new_cmax = calculate_makespan(mutant, problem_instance, validate=False)
 
         if new_cmax <= current_cmax:
             current_permutation = mutant
             current_cmax = new_cmax
+            critical_tasks = _movable_critical_tasks(
+                problem_instance, current_permutation
+            )
 
     return current_permutation
 

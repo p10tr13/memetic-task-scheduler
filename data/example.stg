@@ -13,5 +13,5 @@
          11          2          2          8          9
          12          4          1         10
          13          0          2         11         12
-# Small hand-authored DAG (12 real tasks + 2 dummies) for the MILP optimality-gap demo.
+# Example: hand-authored DAG (12 real tasks + 2 dummies) for the MILP optimality-gap demo.
 # Not from any dataset; small enough to solve to proven optimality with the MILP solver.

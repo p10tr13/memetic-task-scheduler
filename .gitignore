@@ -226,3 +226,5 @@ data/100/
 
 # Experiment outputs
 results/
+# Claude Code local state
+.claude/

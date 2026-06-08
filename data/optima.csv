@@ -1,0 +1,11 @@
+instance,stg_id,processors,reference,kind,lower_bound,verified,note,source
+rand0000_t50_p008,50/rand0000,4,66,optimal,66,yes,proven optimal; equals work/M lower bound,https://www.kasahara.cs.waseda.ac.jp/schedule/optim_v2.html
+rand0093_t50_p078,50/rand0093,4,73,best_known,71,no,range 71-73 (not solved to optimality in 10 min); single-pass extract,https://www.kasahara.cs.waseda.ac.jp/schedule/optim_v2.html
+rand0063_t100_p002,100/rand0063,4,136,optimal,,no,proven optimal; single-pass extract to spot-check,https://www.kasahara.cs.waseda.ac.jp/schedule/optim_v2.html
+rand0173_t100_p039,100/rand0173,4,206,best_known,199,no,range 199-206; single-pass extract,https://www.kasahara.cs.waseda.ac.jp/schedule/optim_v2.html
+rand0071_t300_p001,300/rand0071,4,423,optimal,,no,proven optimal; single-pass extract to spot-check,https://www.kasahara.cs.waseda.ac.jp/schedule/optim_v2.html
+rand0000_t300_p016,300/rand0000,4,464,best_known,448,yes,range 448-464; 448 is the lower bound and matches our computed LB,https://www.kasahara.cs.waseda.ac.jp/schedule/optim_v2.html
+rand0014_t500_p020,500/rand0014,8,,none,,,size 500 not in optim_v2 tables; use computed lower bound,https://www.kasahara.cs.waseda.ac.jp/schedule/stgarc_e.html
+robot_t88_p003,robot.stg,4,,none,,,no published optimum for real-application graphs,https://www.kasahara.cs.waseda.ac.jp/schedule/stgarc_e.html
+sparse_t96_p001,sparse.stg,4,,none,,,no published optimum for real-application graphs,https://www.kasahara.cs.waseda.ac.jp/schedule/stgarc_e.html
+fpppp_t334_p002,fpppp.stg,4,,none,,,no published optimum for real-application graphs,https://www.kasahara.cs.waseda.ac.jp/schedule/stgarc_e.html
