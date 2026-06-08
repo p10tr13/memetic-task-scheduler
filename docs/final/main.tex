@@ -4,6 +4,7 @@
 \usepackage[polish]{babel}
 \usepackage[a4paper,margin=2.5cm]{geometry}
 \usepackage{graphicx}
+\usepackage{float}
 \usepackage{hyperref}
 \usepackage{amssymb}
 \usepackage{amsmath}
@@ -11,6 +12,27 @@
 \usepackage{enumitem}
 \usepackage{listings}
 \usepackage{xcolor}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
+
+% --- wspólne kolory konfiguracji (spójne między wykresami) ---
+\definecolor{colOX}{HTML}{1F77B4}      % ox        -- niebieski
+\definecolor{colPMX}{HTML}{FF7F0E}     % pmx       -- pomarańczowy
+\definecolor{colOXC}{HTML}{2CA02C}     % ox_cpm    -- zielony
+\definecolor{colPMXC}{HTML}{D62728}    % pmx_cpm   -- czerwony
+
+% --- wspólny styl wykresów ---
+\pgfplotsset{
+    wykres/.style={
+        width=0.92\textwidth, height=6.2cm,
+        tick label style={font=\small},
+        label style={font=\small},
+        legend style={font=\small, draw=none, fill=none},
+        grid=major, grid style={gray!18},
+        every axis plot/.append style={line width=1pt},
+    },
+}
 
 % --- listings: prosty styl dla fragmentów kodu / poleceń ---
 \lstset{
@@ -127,10 +149,11 @@ Z połączenia dwóch operatorów krzyżowania (OX/PMX) oraz obecności bądź b
 \par\medskip\noindent
 \textbf{Powtarzalność.} Ustalono ziarna generatora liczb losowych, a środowisko (wersje bibliotek) udokumentowano w pliku \texttt{requirements.txt}. Pełną kampanię odtwarza się poleceniami:
 \begin{lstlisting}[language=bash]
-python -m src.experiments.run_experiments   # surowe wyniki + krzywe zbieznosci
-python -m src.experiments.analyze           # podsumowanie + testy Wilcoxona (H1/H2)
-python -m src.experiments.plots             # wykresy pudelkowe i krzywe zbieznosci
+python -m src.experiments.run_campaign --name run1   # baseline'y + macierz OX/PMX x CPM
+python -m src.experiments.analyze --campaign results/run1   # podsumowanie + Wilcoxon (H1/H2)
+python -m src.experiments.plots   --campaign results/run1   # wykresy pudelkowe i zbieznosci
 \end{lstlisting}
+Pełna kampania obejmuje 20 instancji $\times$ 4 konfiguracje $\times$ 15 ziaren ($=1200$ uruchomień AE). Każda komórka \texttt{(instancja, konfiguracja)} zapisywana jest do osobnego katalogu, dzięki czemu kampanię można wznawiać przyrostowo (\texttt{-{}-skip-existing-cells}) oraz zrównoleglać niezależne komórki (\texttt{-{}-jobs}).
 
 \todo{ewentualnie dodać krótki opis najciekawszych decyzji implementacyjnych / problemów napotkanych w trakcie (np. naprawa CPM świadomej harmonogramu, kara za niedopuszczalność jako martwy kod).}
 
@@ -146,90 +169,278 @@ python -m src.experiments.plots             # wykresy pudelkowe i krzywe zbiezno
 \par\medskip\noindent
 \textbf{Zestawy testowe.} Jako instancje testowe posłużyły grafy ze zbioru \textit{Standard Task Graph Set} (Kasahara Lab)~\cite{tobita2002} oraz grafy generowane syntetycznie z kontrolowaną liczbą zadań i gęstością. Dla małych instancji ($|T| \leq 30$) wyznaczono rozwiązanie optymalne solverem MILP w celu raportowania luki optymalizacyjnej; dla większych instancji odniesieniem jest dolne ograniczenie $LB = \max(\lceil \text{całkowita praca}/M \rceil,\ \text{ścieżka krytyczna})$.
 \par\medskip\noindent
-\textbf{Protokół statystyczny.} Dla każdej konfiguracji wykonano co najmniej 30 niezależnych uruchomień (10 dla dwóch największych instancji ze względów obliczeniowych). Miarą jakości jest najlepszy $C_{max}$ na uruchomienie; tabele raportują medianę. Istotność różnic weryfikowano sparowanym testem kolejności rangowanej Wilcoxona~\cite{wilcoxon1945} (te same ziarna), z korekcją Holma w obrębie każdej rodziny hipotez, $\alpha = 0{,}05$.
+\textbf{Protokół statystyczny.} Dla każdej konfiguracji wykonano 15 niezależnych uruchomień (ziarna $0$--$14$). Liczba ta jest poniżej zwyczajowej konwencji 30 uruchomień i stanowi udokumentowane ograniczenie mocy statystycznej, podyktowane czasem obliczeń (komórki memetyczne na największych instancjach trwają od kilkudziesięciu minut do kilku godzin). Miarą jakości jest najlepszy $C_{max}$ na uruchomienie; tabele raportują medianę. Istotność różnic weryfikowano sparowanym testem kolejności rangowanej Wilcoxona~\cite{wilcoxon1945} (te same ziarna), z korekcją Holma w obrębie każdej rodziny hipotez, $\alpha = 0{,}05$.
 \par\medskip\noindent
 \textbf{Baseline'y i ablacje.} Podejście zestawiono z klasycznymi heurystykami listowymi HLFET~\cite{adam1974} oraz MCP~\cite{wu1990}, a także z czystym AE pozbawionym komponentu lokalnego.
 
 \paragraph{Zastrzeżenie dot. budżetu (H1).} Konfiguracje memetyczne wykonują dodatkowe ewaluacje funkcji celu wewnątrz lokalnego przeszukiwania CPM, dlatego porównanie prowadzone jest przy równej liczbie \emph{pokoleń}, a nie przy równym budżecie ewaluacji. Przewaga CPM jest zatem częściowo skutkiem większego efektywnego nakładu obliczeniowego na pokolenie. \todo{ewentualne porównanie przy równym budżecie ewaluacji -- jeśli zostanie wykonane.}
 
-\paragraph{Hiperparametry.} \todo{uzupełnić finalne wartości: rozmiar populacji, liczba pokoleń, $p_c$, $p_m$, rozmiar turnieju. Opisać ewentualne ablacje hiperparametrów lub zaznaczyć, że nie były przeprowadzone.}
+\paragraph{Hiperparametry.} Parametry AE są globalne (jednakowe dla wszystkich instancji), a ich wartości mieszczą się w zakresach typowych dla algorytmów genetycznych i memetycznych na problemach permutacyjnych:
+\begin{itemize}[itemsep=1pt, topsep=2pt, leftmargin=2.2em]
+    \item rozmiar populacji: $50$;
+    \item liczba pokoleń: $100$ (stały budżet -- krzywe zbieżności uśredniane po ziarnach wymagają jednakowej długości);
+    \item prawdopodobieństwo krzyżowania $p_c = 0{,}8$;
+    \item prawdopodobieństwo mutacji $p_m = 0{,}3$ (na osobnika, nie na bit);
+    \item rozmiar turnieju: $3$;
+    \item liczba prób lokalnego przeszukiwania CPM na osobnika: $20$.
+\end{itemize}
+\todo{ablacje hiperparametrów (rozmiar populacji, $p_c$, $p_m$, rozmiar turnieju) nie zostały przeprowadzone -- do ewentualnego uzupełnienia.}
 
 % =====================================================================
 \section{Wyniki}
 \label{sec:wyniki}
 % =====================================================================
-\todo{Cały rozdział do finalizacji po ostatecznym przebiegu kampanii. Liczby poniżej pochodzą z bieżącego przebiegu i należy je potwierdzić/odświeżyć. Źródła: \texttt{results/campaign/summary.csv}, \texttt{h1\_wilcoxon.csv}, \texttt{h2\_wilcoxon.csv} oraz \texttt{RESULTS.md}.}
+Wyniki pochodzą z pełnej kampanii (20 instancji $\times$ 4 konfiguracje $\times$ 15 ziaren). Liczby w tabelach generowane są z plików \texttt{summary.csv}, \texttt{h1\_wilcoxon.csv} oraz \texttt{h2\_wilcoxon.csv} (kampania \texttt{results/20260607\_134535}).
 
 \subsection{Charakterystyka instancji}
-\todo{Wstawić finalną tabelę instancji: rozmiar, liczba krawędzi, gęstość, $M$, HLFET, MCP, optimum MILP (jeśli dostępne), dolne ograniczenie LB. Wzorzec poniżej.}
+Zestaw testowy obejmuje 10 grafów syntetycznych (\texttt{syn\_*}) o kontrolowanej liczbie zadań i gęstości oraz 10 grafów rzeczywistych ze zbioru Standard Task Graph (\texttt{rand\_*}, \texttt{robot}, \texttt{sparse}, \texttt{fpppp}). Heurystyki HLFET i MCP dają na każdej instancji tę samą wartość (kolumna HLFET/MCP). Dla $|T|\le 30$ podano optimum MILP, w~pozostałych przypadkach dolne ograniczenie LB.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \small
-\begin{tabular}{lrrrrr}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lrrrrrr}
 \toprule
-instancja & $|T|$ & $|E|$ & gęstość & $M$ & ref. ($C_{max}$) \\
+instancja & $|T|$ & $|E|$ & gęstość & $M$ & HLFET/MCP & ref. ($C_{max}$) \\
 \midrule
-small\_15 & 17 & 31 & 0{,}107 & 2 & 52 (MILP) \\
-small\_22 & 24 & 48 & 0{,}083 & 3 & 44 (MILP) \\
-\todo{\dots} & & & & & \\
+\texttt{syn\_t15\_p010}      &  17 &    27 & 0{,}093 & 2 &   54 &   52 (MILP) \\
+\texttt{syn\_t22\_p018}      &  24 &    52 & 0{,}090 & 3 &   48 &   44 (MILP) \\
+\texttt{syn\_t30\_p030}      &  32 &   135 & 0{,}132 & 3 &   66 &   66 (MILP) \\
+\texttt{syn\_t40\_p006}      &  42 &    78 & 0{,}044 & 4 &   55 &   52 (LB) \\
+\texttt{syn\_t40\_p035}      &  42 &   277 & 0{,}157 & 4 &  108 &  108 (LB) \\
+\texttt{syn\_t60\_p005}      &  62 &   127 & 0{,}033 & 4 &   74 &   72 (LB) \\
+\texttt{syn\_t60\_p015}      &  62 &   279 & 0{,}073 & 4 &   88 &   77 (LB) \\
+\texttt{syn\_t100\_p004}     & 102 &   249 & 0{,}024 & 4 &  126 &  126 (LB) \\
+\texttt{syn\_t100\_p012}     & 102 &   611 & 0{,}059 & 4 &  153 &  131 (LB) \\
+\texttt{syn\_t150\_p004}     & 152 &   497 & 0{,}022 & 4 &  241 &  230 (LB) \\
+\midrule
+\texttt{rand0000\_t50\_p008} &  52 &   119 & 0{,}044 & 4 &   77 &   66 (LB) \\
+\texttt{rand0093\_t50\_p078} &  52 &   974 & 0{,}360 & 4 &   73 &   69 (LB) \\
+\texttt{rand0063\_t100\_p002}& 102 &   180 & 0{,}017 & 4 &  137 &  136 (LB) \\
+\texttt{rand0173\_t100\_p039}& 102 &  1940 & 0{,}187 & 4 &  218 &  199 (LB) \\
+\texttt{rand0071\_t300\_p001}& 302 &   561 & 0{,}006 & 4 &  428 &  423 (LB) \\
+\texttt{rand0000\_t300\_p016}& 302 &  7265 & 0{,}080 & 4 &  505 &  448 (LB) \\
+\texttt{rand0014\_t500\_p020}& 502 & 24597 & 0{,}098 & 8 &  893 &  893 (LB) \\
+\texttt{robot\_t88\_p003}    &  90 &   135 & 0{,}017 & 4 &  694 &  621 (LB) \\
+\texttt{sparse\_t96\_p001}   &  98 &   177 & 0{,}018 & 4 &  486 &  484 (LB) \\
+\texttt{fpppp\_t334\_p002}   & 336 &  1211 & 0{,}011 & 4 & 1903 & 1783 (LB) \\
 \bottomrule
 \end{tabular}
-\caption{Charakterystyka instancji testowych. \todo{uzupełnić pełny zestaw}}
+\caption{Charakterystyka instancji testowych (10 syntetycznych + 10 rzeczywistych STG).}
 \label{tab:instances}
 \end{table}
 
 \subsection{Jakość rozwiązań -- mediana $C_{max}$ wg konfiguracji}
-\todo{Wstawić finalną tabelę mediany $C_{max}$ dla czterech konfiguracji (ox / pmx / ox\_cpm / pmx\_cpm) wraz z luką do odniesienia. Najlepszą konfigurację na instancję zaznaczyć pogrubieniem.}
+Tabela~\ref{tab:cmax} zestawia medianę $C_{max}$ (po 15 ziarnach) dla czterech konfiguracji wraz z odniesieniem. Najlepszą konfigurację na instancję zaznaczono pogrubieniem. Konfiguracja \texttt{pmx\_cpm} jest najlepsza (lub równie dobra) na \emph{każdej} instancji.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \small
+\setlength{\tabcolsep}{6pt}
 \begin{tabular}{lrrrrr}
 \toprule
-instancja & ref. & ox & pmx & ox\_cpm & pmx\_cpm \\
+instancja & ref. & \texttt{ox} & \texttt{pmx} & \texttt{ox\_cpm} & \texttt{pmx\_cpm} \\
 \midrule
-\todo{\dots} & & & & & \\
+\texttt{syn\_t15\_p010}       &  52 & \textbf{52}  & \textbf{52}  & \textbf{52}  & \textbf{52} \\
+\texttt{syn\_t22\_p018}       &  44 & 46           & 45           & \textbf{44}  & \textbf{44} \\
+\texttt{syn\_t30\_p030}       &  66 & \textbf{66}  & \textbf{66}  & \textbf{66}  & \textbf{66} \\
+\texttt{syn\_t40\_p006}       &  52 & 55           & \textbf{52}  & \textbf{52}  & \textbf{52} \\
+\texttt{syn\_t40\_p035}       & 108 & \textbf{108} & \textbf{108} & \textbf{108} & \textbf{108} \\
+\texttt{syn\_t60\_p005}       &  72 & 81           & 73           & \textbf{72}  & \textbf{72} \\
+\texttt{syn\_t60\_p015}       &  77 & 89           & 81           & 81           & \textbf{78} \\
+\texttt{syn\_t100\_p004}      & 126 & 128          & \textbf{126} & 127          & \textbf{126} \\
+\texttt{syn\_t100\_p012}      & 131 & 162          & 143          & 142          & \textbf{135} \\
+\texttt{syn\_t150\_p004}      & 230 & 234          & \textbf{230} & 232          & \textbf{230} \\
+\midrule
+\texttt{rand0000\_t50\_p008}  &  66 & 73           & 67           & \textbf{66}  & \textbf{66} \\
+\texttt{rand0093\_t50\_p078}  &  69 & \textbf{73}  & \textbf{73}  & \textbf{73}  & \textbf{73} \\
+\texttt{rand0063\_t100\_p002} & 136 & 137          & \textbf{136} & \textbf{136} & \textbf{136} \\
+\texttt{rand0173\_t100\_p039} & 199 & 228          & 214          & 212          & \textbf{206} \\
+\texttt{rand0071\_t300\_p001} & 423 & 425          & \textbf{423} & 424          & \textbf{423} \\
+\texttt{rand0000\_t300\_p016} & 448 & 531          & 503          & 512          & \textbf{470} \\
+\texttt{rand0014\_t500\_p020} & 893 & \textbf{893} & \textbf{893} & \textbf{893} & \textbf{893} \\
+\texttt{robot\_t88\_p003}     & 621 & 814          & 743          & 729          & \textbf{697} \\
+\texttt{sparse\_t96\_p001}    & 484 & 502          & 486          & 486          & \textbf{484} \\
+\texttt{fpppp\_t334\_p002}    &1783 & 2067         & 1896         & 2017         & \textbf{1843} \\
 \bottomrule
 \end{tabular}
-\caption{Mediana $C_{max}$ według konfiguracji. \todo{uzupełnić}}
+\caption{Mediana $C_{max}$ według konfiguracji; pogrubieniem zaznaczono najlepszą na instancję.}
 \label{tab:cmax}
 \end{table}
 
+Algorytm memetyczny pokonuje heurystyki HLFET/MCP na 19 z 20 instancji (wyjątkiem jest \texttt{robot\_t88}, gdzie HLFET=694 wyprzedza medianę \texttt{pmx\_cpm}=697, lecz nie jej najlepszy przebieg 671). Kilka instancji jest \emph{wymuszonych} -- każda konfiguracja osiąga ograniczenie (\texttt{syn\_t15}, \texttt{syn\_t30}, \texttt{syn\_t40\_p035}, \texttt{rand0093}, a także 500-zadaniowa \texttt{rand0014\_t500}, gdzie wszystkie konfiguracje, łącznie z~HLFET/MCP, dają LB${}=893$) i~nie niosą sygnału.
+
+Rysunek~\ref{fig:gap} przedstawia lukę do dolnego ograniczenia (\%) dla czterech konfiguracji na reprezentatywnych instancjach -- jednocześnie ilustruje obniżenie luki przez CPM (H1) oraz przewagę PMX nad OX (H2).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    wykres,
+    ybar, bar width=4.2pt,
+    ymin=0,
+    ylabel={luka do LB [\%]},
+    symbolic x coords={syn\_t22,syn\_t60\_p005,syn\_t100\_p012,rand0173,rand0000\_t300,robot\_t88,fpppp},
+    xtick=data,
+    x tick label style={rotate=35, anchor=east, font=\footnotesize},
+    legend columns=4, legend style={at={(0.5,1.04)}, anchor=south},
+    enlarge x limits=0.08,
+]
+\addplot[fill=colOX,draw=colOX]     coordinates {(syn\_t22,4.55)(syn\_t60\_p005,12.5)(syn\_t100\_p012,23.66)(rand0173,14.57)(rand0000\_t300,18.53)(robot\_t88,31.08)(fpppp,15.93)};
+\addplot[fill=colPMX,draw=colPMX]   coordinates {(syn\_t22,2.27)(syn\_t60\_p005,1.39)(syn\_t100\_p012,9.16)(rand0173,7.54)(rand0000\_t300,12.28)(robot\_t88,19.65)(fpppp,6.34)};
+\addplot[fill=colOXC,draw=colOXC]   coordinates {(syn\_t22,0)(syn\_t60\_p005,0)(syn\_t100\_p012,8.4)(rand0173,6.53)(rand0000\_t300,14.29)(robot\_t88,17.39)(fpppp,13.12)};
+\addplot[fill=colPMXC,draw=colPMXC] coordinates {(syn\_t22,0)(syn\_t60\_p005,0)(syn\_t100\_p012,3.05)(rand0173,3.52)(rand0000\_t300,4.91)(robot\_t88,12.24)(fpppp,3.37)};
+\legend{ox,pmx,ox\_cpm,pmx\_cpm}
+\end{axis}
+\end{tikzpicture}
+\caption{Luka mediany $C_{max}$ do dolnego ograniczenia LB (\%) dla czterech konfiguracji. Dla każdej instancji CPM obniża słupek (ox$\to$ox\_cpm, pmx$\to$pmx\_cpm), a PMX leży poniżej OX; \texttt{pmx\_cpm} (czerwony) jest najniższy.}
+\label{fig:gap}
+\end{figure}
+
 \subsection{Weryfikacja H1 -- wpływ optymalizacji CPM}
-\todo{Wstawić finalną tabelę testów Wilcoxona CPM-on vs CPM-off (per krzyżowanie, per instancja), z $\Delta$ mediany i skorygowaną $p$. Skomentować werdykt.}
+Tabela~\ref{tab:h1} zawiera istotne testy sparowane Wilcoxona CPM-on vs CPM-off (po korekcji Holma). Pozostałe pary to remisy w optimum/ograniczeniu (brak zapasu na poprawę).
+
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{llrrrc}
+\toprule
+instancja & krzyż. & CPM-off & CPM-on & $\Delta$ med. & $p_{\text{Holm}}$ \\
+\midrule
+\texttt{syn\_t22\_p018}       & ox  &   46 &   44 &   2 & 0{,}019 \\
+\texttt{syn\_t40\_p006}       & ox  &   55 &   52 &   3 & 0{,}015 \\
+\texttt{syn\_t60\_p005}       & ox  &   81 &   72 &   9 & 0{,}021 \\
+\texttt{syn\_t60\_p005}       & pmx &   73 &   72 &   1 & 0{,}021 \\
+\texttt{syn\_t60\_p015}       & ox  &   89 &   81 &   8 & 0{,}019 \\
+\texttt{syn\_t100\_p012}      & ox  &  162 &  142 &  20 & 0{,}021 \\
+\texttt{syn\_t100\_p012}      & pmx &  143 &  135 &   8 & 0{,}021 \\
+\texttt{rand0000\_t50\_p008}  & ox  &   73 &   66 &   7 & 0{,}021 \\
+\texttt{rand0173\_t100\_p039} & ox  &  228 &  212 &  16 & 0{,}021 \\
+\texttt{rand0173\_t100\_p039} & pmx &  214 &  206 &   8 & 0{,}021 \\
+\texttt{rand0000\_t300\_p016} & ox  &  531 &  512 &  19 & 0{,}021 \\
+\texttt{rand0000\_t300\_p016} & pmx &  503 &  470 &  33 & 0{,}021 \\
+\texttt{robot\_t88\_p003}     & ox  &  814 &  729 &  85 & 0{,}021 \\
+\texttt{robot\_t88\_p003}     & pmx &  743 &  697 &  46 & 0{,}021 \\
+\texttt{fpppp\_t334\_p002}    & ox  & 2067 & 2017 &  50 & 0{,}004 \\
+\texttt{fpppp\_t334\_p002}    & pmx & 1896 & 1843 &  53 & 0{,}041 \\
+\bottomrule
+\end{tabular}
+\caption{Wybrane istotne testy H1 (CPM-on vs CPM-off, $\Delta$ mediany $>0$ na korzyść CPM). Łącznie istotnych jest 25/25 testów, wszystkie na korzyść CPM-on.}
+\label{tab:h1}
+\end{table}
+
+\noindent\textbf{Werdykt: H1 potwierdzona.} Na wszystkich instancjach posiadających zapas lokalne przeszukiwanie CPM istotnie obniża medianę $C_{max}$ dla obu operatorów: \textbf{25/25 istotnych testów na korzyść CPM-on, żaden na korzyść CPM-off.} Efekt rośnie z~trudnością instancji (\texttt{robot\_t88}: $-85$ dla OX, $-46$ dla PMX; \texttt{rand0000\_t300}: $-33$ dla PMX). Wynik jest obarczony zastrzeżeniem o~równej liczbie pokoleń.
 
 \subsection{Weryfikacja H2 -- OX vs PMX na grafach rzadkich}
-\todo{Wstawić finalną tabelę testów Wilcoxona OX vs PMX (czysty AE), z podziałem na grafy rzadkie/gęste. Skomentować werdykt.}
+Tabela~\ref{tab:h2} zawiera testy sparowane OX vs PMX (czysty AE). Na żadnej instancji OX nie dominuje istotnie nad PMX.
 
-\subsection{Wykresy}
-\todo{Wstawić wykresy pudełkowe $C_{max}$ oraz krzywe zbieżności dla reprezentatywnych instancji z katalogu \texttt{results/campaign/plots/}. Przykładowy szkielet poniżej.}
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{lcrrrc}
+\toprule
+instancja & klasa & \texttt{ox} & \texttt{pmx} & lepszy & $p_{\text{Holm}}$ \\
+\midrule
+\texttt{fpppp\_t334\_p002}    & rzadki & 2067 & 1896 & pmx & 0{,}002 \\
+\texttt{robot\_t88\_p003}     & rzadki &  814 &  743 & pmx & 0{,}002 \\
+\texttt{rand0063\_t100\_p002} & rzadki &  137 &  136 & pmx & 0{,}005 \\
+\texttt{syn\_t40\_p006}       & rzadki &   55 &   52 & pmx & 0{,}009 \\
+\texttt{rand0000\_t300\_p016} & rzadki &  531 &  503 & pmx & 0{,}010 \\
+\texttt{rand0000\_t50\_p008}  & rzadki &   73 &   67 & pmx & 0{,}010 \\
+\texttt{syn\_t100\_p012}      & rzadki &  162 &  143 & pmx & 0{,}010 \\
+\texttt{syn\_t60\_p005}       & rzadki &   81 &   73 & pmx & 0{,}010 \\
+\texttt{syn\_t22\_p018}       & rzadki &   46 &   45 & pmx & 0{,}035 \\
+\texttt{rand0173\_t100\_p039} & gęsty  &  228 &  214 & pmx & 0{,}010 \\
+\texttt{rand0014\_t500\_p020} & rzadki &  893 &  893 & remis & 1{,}000 \\
+\texttt{rand0093\_t50\_p078}  & gęsty  &   73 &   73 & remis & 1{,}000 \\
+\bottomrule
+\end{tabular}
+\caption{Testy H2 (OX vs PMX, czysty AE). Spośród grafów rzadkich 0/14 istotnych testów na korzyść OX; PMX wygrywa wszędzie poza remisami w~ograniczeniu.}
+\label{tab:h2}
+\end{table}
 
-% \begin{figure}[h]
-%   \centering
-%   \includegraphics[width=0.49\textwidth]{../../results/campaign/plots/random_300_boxplot.png}
-%   \includegraphics[width=0.49\textwidth]{../../results/campaign/plots/random_300_convergence.png}
-%   \caption{random_300: wykres pudełkowy oraz krzywa zbieżności.}
-%   \label{fig:random300}
-% \end{figure}
+\noindent\textbf{Werdykt: H2 odrzucona -- zachodzi relacja przeciwna.} Na \emph{każdej} nieremisowej instancji PMX istotnie pokonuje OX (\textbf{0/14 istotnych testów na grafach rzadkich na korzyść OX}); remisy występują tylko tam, gdzie oba operatory osiągają ograniczenie. PMX wygrywa z~dużymi marginesami na trudnych grafach rzeczywistych (\texttt{fpppp}: $-171$, \texttt{robot\_t88}: $-71$). Rysunek~\ref{fig:h2} pokazuje to na luce do LB.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    wykres, height=5.6cm,
+    ybar, bar width=8pt,
+    ymin=0,
+    ylabel={luka do LB [\%]},
+    symbolic x coords={rand0000\_t50,syn\_t60\_p005,syn\_t100\_p012,rand0000\_t300,robot\_t88,fpppp},
+    xtick=data,
+    x tick label style={rotate=30, anchor=east, font=\footnotesize},
+    legend columns=2, legend style={at={(0.5,1.04)}, anchor=south},
+    enlarge x limits=0.12,
+]
+\addplot[fill=colOX,draw=colOX]   coordinates {(rand0000\_t50,10.61)(syn\_t60\_p005,12.5)(syn\_t100\_p012,23.66)(rand0000\_t300,18.53)(robot\_t88,31.08)(fpppp,15.93)};
+\addplot[fill=colPMX,draw=colPMX] coordinates {(rand0000\_t50,1.52)(syn\_t60\_p005,1.39)(syn\_t100\_p012,9.16)(rand0000\_t300,12.28)(robot\_t88,19.65)(fpppp,6.34)};
+\legend{ox,pmx}
+\end{axis}
+\end{tikzpicture}
+\caption{H2: luka do LB (\%) dla czystego AE -- PMX (pomarańczowy) konsekwentnie poniżej OX (niebieski) na grafach rzadkich.}
+\label{fig:h2}
+\end{figure}
+
+\subsection{Krzywe zbieżności}
+Rysunek~\ref{fig:conv} przedstawia uśrednione po ziarnach krzywe zbieżności (najlepszy $C_{max}$ w~populacji w~funkcji pokolenia) dla dwóch reprezentatywnych instancji. Widoczna jest wyraźna separacja konfiguracji: \texttt{pmx\_cpm} zbiega najniżej, a~różnica narasta w~kolejnych pokoleniach.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[
+    group style={group size=2 by 1, horizontal sep=1.5cm},
+    wykres, width=0.5\textwidth, height=5.6cm,
+    xlabel={pokolenie}, ylabel={mediana najlepszego $C_{max}$},
+    xmin=0, xmax=100,
+    legend columns=4, legend style={at={(1.1,-0.34)}, anchor=north, /tikz/every even column/.append style={column sep=6pt}},
+    cycle list={
+        {colOX, thick},
+        {colPMX, thick},
+        {colOXC, thick},
+        {colPMXC, thick},
+    },
+]
+\nextgroupplot[title={\small \texttt{syn\_t100\_p012}}]
+\addplot table[x=gen, y=ox]      {data/conv_syn_t100_p012.dat};
+\addplot table[x=gen, y=pmx]     {data/conv_syn_t100_p012.dat};
+\addplot table[x=gen, y=ox_cpm]  {data/conv_syn_t100_p012.dat};
+\addplot table[x=gen, y=pmx_cpm] {data/conv_syn_t100_p012.dat};
+\legend{ox,pmx,ox\_cpm,pmx\_cpm}
+\nextgroupplot[title={\small \texttt{rand0173\_t100\_p039}}]
+\addplot table[x=gen, y=ox]      {data/conv_rand0173_t100_p039.dat};
+\addplot table[x=gen, y=pmx]     {data/conv_rand0173_t100_p039.dat};
+\addplot table[x=gen, y=ox_cpm]  {data/conv_rand0173_t100_p039.dat};
+\addplot table[x=gen, y=pmx_cpm] {data/conv_rand0173_t100_p039.dat};
+\end{groupplot}
+\end{tikzpicture}
+\caption{Krzywe zbieżności (mediana po 15 ziarnach) dla dwóch instancji. \texttt{pmx\_cpm} dominuje przez cały przebieg.}
+\label{fig:conv}
+\end{figure}
 
 % =====================================================================
 \section{Dyskusja}
 \label{sec:dyskusja}
 % =====================================================================
-\todo{Do finalizacji. Punkty do omówienia (na podstawie bieżących wyników -- potwierdzić):}
-\begin{itemize}[itemsep=2pt, topsep=3pt]
-    \item \textbf{H1} -- wstępnie potwierdzona: CPM istotnie obniża $C_{max}$ wszędzie tam, gdzie istnieje zapas (z zastrzeżeniem dot. budżetu pokoleń); efekt rośnie z trudnością instancji. \todo{potwierdzić finalnymi liczbami.}
-    \item \textbf{H2} -- wstępnie odrzucona, zachodzi relacja przeciwna: PMX istotnie dominuje nad OX na grafach rzadkich. Prawdopodobna przyczyna: naprawa listy gotowych już wymusza pierwszeństwo, więc przewaga OX w zachowaniu kolejności jest stłumiona, podczas gdy pozycyjne mieszanie PMX skuteczniej eksploruje przestrzeń priorytetów. \todo{potwierdzić finalnymi liczbami.}
-    \item Algorytm memetyczny pokonuje heurystyki listowe HLFET/MCP na każdej instancji; pozostała luka do dolnego ograniczenia. \todo{podać finalne wartości luk.}
-    \item Ograniczenia metody i zagrożenia trafności (brak elityzmu, porównanie przy równej liczbie pokoleń, dobór instancji). \todo{rozwinąć.}
+\begin{itemize}[itemsep=3pt, topsep=3pt]
+    \item \textbf{H1 -- potwierdzona.} Lokalne przeszukiwanie CPM istotnie obniża medianę $C_{max}$ wszędzie tam, gdzie istnieje zapas: 25/25 istotnych testów na korzyść CPM-on, żaden na korzyść CPM-off. Efekt rośnie z~trudnością instancji -- największy na grafach rzeczywistych (\texttt{robot\_t88}: $-85$ dla OX, \texttt{fpppp}: $-53$ dla PMX). Pozostaje zastrzeżenie o~równej liczbie pokoleń: konfiguracje memetyczne wykonują dodatkowe ewaluacje wewnątrz CPM, więc część przewagi wynika z~większego efektywnego nakładu na pokolenie.
+    \item \textbf{H2 -- odrzucona, zachodzi relacja przeciwna.} PMX istotnie dominuje nad OX na grafach rzadkich (0/14 istotnych testów na korzyść OX), z~dużymi marginesami na trudnych instancjach (\texttt{fpppp}: $-171$, \texttt{robot\_t88}: $-71$). Prawdopodobna przyczyna: naprawa listy gotowych już wymusza pierwszeństwo, więc przewaga OX w~zachowaniu kolejności jest stłumiona, podczas gdy pozycyjne mieszanie PMX skuteczniej eksploruje przestrzeń priorytetów.
+    \item \textbf{Najlepsza konfiguracja.} \texttt{pmx\_cpm} jest najlepsza lub równie dobra na każdej z~20 instancji. Pokonuje heurystyki HLFET/MCP na 19 z~20 instancji; wyjątkiem jest \texttt{robot\_t88}, gdzie mediana (697) nieznacznie ustępuje heurystyce (694), choć najlepszy przebieg (671) jest lepszy. Pozostała luka do LB jest największa na \texttt{robot\_t88} (12{,}2\%), \texttt{rand0093} (5{,}8\%, gęsty), \texttt{rand0000\_t300} (4{,}9\%) i~\texttt{fpppp} (3{,}4\%).
+    \item \textbf{Instancje wymuszone.} Na części instancji każda konfiguracja osiąga ograniczenie (m.in. 500-zadaniowa \texttt{rand0014\_t500}, gdzie nawet HLFET/MCP dają LB${}=893$); nie niosą one sygnału porównawczego i~remisują we wszystkich testach.
+    \item \textbf{Ograniczenia i zagrożenia trafności.} (i) Brak elityzmu -- najlepszy osobnik utrzymywany jest tylko w~\textit{hall of fame}, populacja może go utracić. (ii) Porównanie przy równej liczbie pokoleń, a~nie równym budżecie ewaluacji (zastrzeżenie H1). (iii) 15 ziaren -- poniżej konwencji 30, ograniczona moc statystyczna. (iv) Brak ablacji hiperparametrów.
 \end{itemize}
 
 % =====================================================================
 \section{Wnioski}
 \label{sec:wnioski}
 % =====================================================================
-\todo{Do finalizacji po zatwierdzeniu wyników. Podsumować: najlepsza konfiguracja (wstępnie \texttt{pmx\_cpm}), werdykty H1/H2, przewaga nad baseline'ami, kierunki dalszych prac (ablacje hiperparametrów, elityzm, porównanie przy równym budżecie ewaluacji).}
+Zaproponowany algorytm memetyczny (AE z~lokalnym przeszukiwaniem CPM świadomym harmonogramu) skutecznie rozwiązuje problem $P\,|\,prec\,|\,C_{max}$. Najlepszą konfiguracją jest \texttt{pmx\_cpm}, najlepsza lub równie dobra na każdej z~20 instancji i~pokonująca heurystyki listowe HLFET/MCP na 19 z~nich. Postawione hipotezy rozstrzygnięto jednoznacznie: \textbf{H1 potwierdzona} (CPM istotnie obniża $C_{max}$ -- 25/25 testów; z~zastrzeżeniem o~równej liczbie pokoleń), a~\textbf{H2 odrzucona na korzyść relacji przeciwnej} (to PMX, nie OX, dominuje na grafach rzadkich -- 0/14 testów na korzyść OX).
+\par\medskip\noindent
+\textbf{Kierunki dalszych prac.} (i) Ablacje hiperparametrów (rozmiar populacji, $p_c$, $p_m$, rozmiar turnieju). (ii) Wprowadzenie elityzmu. (iii) Porównanie konfiguracji przy równym budżecie ewaluacji (zamiast równej liczby pokoleń), wymagające licznika ewaluacji w~silniku. (iv) Zwiększenie liczby ziaren do co najmniej 30 dla pełnej mocy statystycznej.
 
 % =====================================================================
 \begin{thebibliography}{99}
