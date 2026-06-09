@@ -505,11 +505,17 @@ instancję i~konfigurację.}
     \item \textbf{Najtrudniejsza instancja: \texttt{robot\_t88}.} Mediana \texttt{pmx\_cpm}=697
     przegrywa tu nieznacznie z~HLFET/MCP=694, choć najlepszy przebieg \texttt{pmx\_cpm}=671 jest lepszy.
     Pokazuje to, że metoda nie dominuje prostych heurystyk w~każdym sensie statystycznym.
-    \item \textbf{Dalsze prace.} Priorytetem powinno być porównanie przy równym budżecie ewaluacji
-    oraz dodanie elityzmu; dopiero później warto rozszerzać ablacje hiperparametrów i~liczbę ziaren.
-    Kolejnym kierunkiem badań może być rownież porównanie z~innymi algorytmami metaheurystycznymi
-    oraz innymi metodami lokalnej optymalizacji. Warto również rozważyć testy operatorów OX i~PMX na innych
-    gęstościach grafów, by sprawdzić, czy przewaga PMX jest specyficzna dla grafów rzadkich.
+    \item \textbf{Wyniki należy czytać przez pryzmat instancji z zapasem.} Część grafów jest wymuszona:
+    wszystkie konfiguracje osiągają LB, więc nie wnoszą sygnału o przewadze operatorów. Najważniejsze
+    różnice pojawiają się na instancjach trudnych, gdzie \texttt{pmx\_cpm} realnie zmniejsza lukę.
+    \item \textbf{PMX jest rekomendacją praktyczną dla tego dekodera.} Przewaga PMX nie musi oznaczać
+    uniwersalnej dominacji tego operatora, lecz wynika z połączenia reprezentacji priorytetowej,
+    naprawy ready-list i dekodera listowego. W tym układzie PMX jest najlepszym wyborem, a sam PMX
+    bez CPM jest zaskakująco konkurencyjny wobec OX z CPM.
+    \item \textbf{Jakość ma koszt obliczeniowy.} CPM daje najlepsze harmonogramy, ale zwiększa liczbę
+    ewaluacji i dominuje czas działania na dużych lub gęstych grafach. Najważniejszym kolejnym krokiem
+    jest więc porównanie przy równym budżecie ewaluacji oraz tańsza, budżetowana wersja lokalnego
+    przeszukiwania.
 \end{itemize}
 
 % =====================================================================
