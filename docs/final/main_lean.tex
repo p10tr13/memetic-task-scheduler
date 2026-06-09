@@ -162,12 +162,15 @@ z~korekcją Holma, $\alpha=0{,}05$. Baseline: heurystyki HLFET~\cite{adam1974} i
 
 \noindent\textbf{Hiperparametry (globalne).} populacja $50$, pokolenia $100$, $p_c=0{,}8$,
 $p_m=0{,}3$ (na osobnika), turniej $3$, prób CPM na osobnika $20$.
+% TODO(Wojtek): Sekcja 4 -- rozwinąć uzasadnienie hiperparametrów na podstawie README.md i źródeł.
 
 \noindent\textbf{Zastrzeżenie (H1).} Warianty memetyczne robią dodatkowe ewaluacje wewnątrz CPM,
 więc porównujemy przy równej liczbie \emph{pokoleń}, nie ewaluacji.
 
 \noindent 15 ziaren to mniej niż zwyczajowe 30 -- ograniczona moc statystyczna, podyktowana czasem
-obliczeń. Ablacji hiperparametrów nie wykonano.
+obliczeń. Pełna kampania (1200 uruchomień AE) zajęła około 17 godzin czasu CPU przy zrównolegleniu,
+a wąskim gardłem były warianty CPM na największych i najgęstszych instancjach. Ablacja
+hiperparametrów nie została wykonana.
 
 % =====================================================================
 \section{Wyniki}
@@ -283,18 +286,18 @@ instancji (\texttt{robot\_t88}: $-85$ dla OX, $-46$ dla PMX).
 \toprule
 instancja & krzyż. & off & on & $\Delta$ & $p_{\text{Holm}}$ \\
 \midrule
-\texttt{syn\_t22\_p018}       & ox  &   46 &   44 &   2 & 0{,}019 \\
-\texttt{syn\_t40\_p006}       & ox  &   55 &   52 &   3 & 0{,}015 \\
-\texttt{syn\_t60\_p005}       & ox  &   81 &   72 &   9 & 0{,}021 \\
-\texttt{syn\_t60\_p015}       & ox  &   89 &   81 &   8 & 0{,}019 \\
-\texttt{syn\_t100\_p012}      & ox  &  162 &  142 &  20 & 0{,}021 \\
-\texttt{syn\_t100\_p012}      & pmx &  143 &  135 &   8 & 0{,}021 \\
-\texttt{rand0173\_t100\_p039} & ox  &  228 &  212 &  16 & 0{,}021 \\
-\texttt{rand0000\_t300\_p016} & pmx &  503 &  470 &  33 & 0{,}021 \\
-\texttt{robot\_t88\_p003}     & ox  &  814 &  729 &  85 & 0{,}021 \\
-\texttt{robot\_t88\_p003}     & pmx &  743 &  697 &  46 & 0{,}021 \\
-\texttt{fpppp\_t334\_p002}    & ox  & 2067 & 2017 &  50 & 0{,}004 \\
-\texttt{fpppp\_t334\_p002}    & pmx & 1896 & 1843 &  53 & 0{,}041 \\
+\texttt{syn\_t22\_p018}       & ox  &   46 &   \textbf{44} &   2 & 0{,}019 \\
+\texttt{syn\_t40\_p006}       & ox  &   55 &   \textbf{52} &   3 & 0{,}015 \\
+\texttt{syn\_t60\_p005}       & ox  &   81 &   \textbf{72} &   9 & 0{,}021 \\
+\texttt{syn\_t60\_p015}       & ox  &   89 &   \textbf{81} &   8 & 0{,}019 \\
+\texttt{syn\_t100\_p012}      & ox  &  162 &  \textbf{142} &  20 & 0{,}021 \\
+\texttt{syn\_t100\_p012}      & pmx &  143 &  \textbf{135} &   8 & 0{,}021 \\
+\texttt{rand0173\_t100\_p039} & ox  &  228 &  \textbf{212} &  16 & 0{,}021 \\
+\texttt{rand0000\_t300\_p016} & pmx &  503 &  \textbf{470} &  33 & 0{,}021 \\
+\texttt{robot\_t88\_p003}     & ox  &  814 &  \textbf{729} &  85 & 0{,}021 \\
+\texttt{robot\_t88\_p003}     & pmx &  743 &  \textbf{697} &  46 & 0{,}021 \\
+\texttt{fpppp\_t334\_p002}    & ox  & 2067 & \textbf{2017} &  50 & 0{,}004 \\
+\texttt{fpppp\_t334\_p002}    & pmx & 1896 & \textbf{1843} &  53 & 0{,}041 \\
 \bottomrule
 \end{tabular}
 \caption{Wybrane istotne testy H1 (CPM-on vs CPM-off). Łącznie istotnych 25/25, wszystkie za CPM-on.}
@@ -391,7 +394,7 @@ Warianty z~CPM, a w szczególności \texttt{pmx\_cpm}, szybciej i~stabilniej zbl
     group style={group size=2 by 2, vertical sep=1.7cm, horizontal sep=1.5cm},
     width=0.5\textwidth, height=4.6cm, boxplot/draw direction=y,
     xtick={1,2,3,4}, xticklabels={ox,pmx,ox\_cpm,pmx\_cpm},
-    x tick label style={font=\footnotesize, rotate=25, anchor=east},
+    x tick label style={font=\footnotesize, rotate=25, anchor=east, yshift=-5pt},
     tick label style={font=\footnotesize}, ylabel style={font=\small}, ylabel={$C_{max}$},
 ]
 \nextgroupplot[title={\small \texttt{syn\_t100\_p012}}]
@@ -487,15 +490,26 @@ instancję i~konfigurację.}
 \label{sec:wnioski}
 % =====================================================================
 \begin{itemize}[itemsep=3pt, topsep=3pt]
-    \item \textbf{H1 potwierdzona:} CPM istotnie obniża $C_{max}$ (25/25 testów), przy zastrzeżeniu
-    o~równej liczbie pokoleń.
-    \item \textbf{H2 odrzucona:} to PMX, nie OX, dominuje na grafach rzadkich (0/14 za OX).
-    \item Najlepsza konfiguracja to \texttt{pmx\_cpm} -- najlepsza na każdej z~20 instancji, lepsza od
-    HLFET/MCP na 19 z~nich. Największa luka do LB: \texttt{robot\_t88} (12,2\%).
-    \item \textbf{Ograniczenia:} brak elityzmu; porównanie przy równej liczbie pokoleń (nie ewaluacji);
-    15 ziaren; brak ablacji hiperparametrów.
-    \item \textbf{Dalej:} ablacje hiperparametrów, elityzm, porównanie przy równym budżecie ewaluacji,
-    więcej ziaren.
+    \item \textbf{Najlepsza metoda to \texttt{pmx\_cpm}.} Nie wystarczy stwierdzić, że AE z~CPM jest
+    dobry. Najlepsze wyniki daje konkretne połączenie PMX z~lokalnym przeszukiwaniem CPM. Wariant ten
+    jest najlepszy lub remisuje na każdej z~20 instancji i~pokonuje HLFET/MCP na 19 z~nich.
+    \item \textbf{H1 potwierdzona, ale z~ważnym zastrzeżeniem.} CPM istotnie obniża $C_{max}$
+    (25/25 testów), lecz porównanie wykonano przy równej liczbie pokoleń, a~nie przy równym budżecie
+    ewaluacji. Przewaga CPM może wynikać z~większego nakładu obliczeniowego na jedno pokolenie.
+    \item \textbf{H2 odrzucona w~stronę przeciwną.} Na grafach rzadkich nie dominuje OX, tylko PMX
+    (0/14 istotnych testów za OX). Jest to praktyczny wynik potwierdzający przeciwną hipotezę:
+    w~tej reprezentacji i~dekoderze PMX jest bezpieczniejszym wyborem operatora od OX.
+    \item \textbf{Prawdopodobna przyczyna przewagi PMX.} Naprawa listą zadań gotowych już wymusza
+    dopuszczalny porządek topologiczny, więc atut OX w~zachowaniu kolejności zostaje osłabiony.
+    Pozycyjne mieszanie PMX skuteczniej eksploruje przestrzeń rozwiązań.
+    \item \textbf{Najtrudniejsza instancja: \texttt{robot\_t88}.} Mediana \texttt{pmx\_cpm}=697
+    przegrywa tu nieznacznie z~HLFET/MCP=694, choć najlepszy przebieg \texttt{pmx\_cpm}=671 jest lepszy.
+    Pokazuje to, że metoda nie dominuje prostych heurystyk w~każdym sensie statystycznym.
+    \item \textbf{Dalsze prace.} Priorytetem powinno być porównanie przy równym budżecie ewaluacji
+    oraz dodanie elityzmu; dopiero później warto rozszerzać ablacje hiperparametrów i~liczbę ziaren.
+    Kolejnym kierunkiem badań może być rownież porównanie z~innymi algorytmami metaheurystycznymi
+    oraz innymi metodami lokalnej optymalizacji. Warto również rozważyć testy operatorów OX i~PMX na innych
+    gęstościach grafów, by sprawdzić, czy przewaga PMX jest specyficzna dla grafów rzadkich.
 \end{itemize}
 
 % =====================================================================
