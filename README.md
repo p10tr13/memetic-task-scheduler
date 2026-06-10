@@ -3,18 +3,12 @@
 Memetic algorithm (evolutionary algorithm + CPM local search) for multiprocessor
 task scheduling with precedence constraints, minimizing makespan (C_max).
 
-## Layout
+## Results
 
-- `src/core/` — domain model, list-scheduling decoder, critical-path (CPM) analysis
-- `src/data/` — parser for Kasahara STG instance files
-- `src/solvers/evolutionary/` — DEAP-based EA: crossovers (OX, PMX), strategies, CPM local search
-- `src/solvers/heuristics.py` — HLFET and MCP list-scheduling baselines
-- `src/solvers/milp.py` — exact time-indexed MILP (CBC via PuLP) for small instances, used to report optimality gaps
-- `src/main.py` — runs HLFET, MCP, the memetic EA, and the MILP on a small bundled instance and prints each optimality gap
-- `src/experiments/` — experiment runners: `instances.py` (benchmark graph registry), `run_single.py` (one instance × one EA config → a result cell), `run_campaign.py` (the OX/PMX × CPM-on/off matrix over all instances), `run_baselines.py` (HLFET/MCP/MILP/lower-bound per instance), `analyze.py` (Wilcoxon for H1/H2), `plots.py` (boxplots, convergence), `layout.py` (shared campaign layout)
-- `data/` — benchmark task graphs (see `data/README.md`): `kasahara/` (10 real STG graphs spanning size/density), `synthetic/` (10 generated graphs, `make data`), `example.stg` (tiny MILP-demo graph), and `optima.csv` (published makespan references for the Kasahara graphs)
-- `tests/` — unit tests
-- `docs/preliminary/` — preliminary documentation
+See the final report ([docs/02_final.pdf](docs/02_final.pdf)) for the full
+campaign: optimality/lower-bound gaps, the HLFET/MCP baselines, and the Wilcoxon
+tests for H1 (CPM lowers C_max) and H2 (OX vs PMX on sparse graphs). Reproduce
+with the commands below.
 
 ## Setup
 
@@ -78,8 +72,15 @@ parameters for GAs*; Omara & Arafa (2010), *Genetic algorithms for task scheduli
 problem*, JPDC 70(1); Hou, Ansari & Ren (1994), IEEE TPDS; Tobita & Kasahara
 (2002), Standard Task Graph set.
 
-## Results
+## Layout
 
-See [RESULTS.md](RESULTS.md) for the full campaign: optimality/lower-bound gaps,
-the HLFET/MCP baselines, and the Wilcoxon tests for H1 (CPM lowers C_max) and H2
-(OX vs PMX on sparse graphs). Reproduce with the commands above.
+- `src/core/` — domain model, list-scheduling decoder, critical-path (CPM) analysis
+- `src/data/` — parser for Kasahara STG instance files
+- `src/solvers/evolutionary/` — DEAP-based EA: crossovers (OX, PMX), strategies, CPM local search
+- `src/solvers/heuristics.py` — HLFET and MCP list-scheduling baselines
+- `src/solvers/milp.py` — exact time-indexed MILP (CBC via PuLP) for small instances, used to report optimality gaps
+- `src/main.py` — runs HLFET, MCP, the memetic EA, and the MILP on a small bundled instance and prints each optimality gap
+- `src/experiments/` — experiment runners: `instances.py` (benchmark graph registry), `run_single.py` (one instance × one EA config → a result cell), `run_campaign.py` (the OX/PMX × CPM-on/off matrix over all instances), `run_baselines.py` (HLFET/MCP/MILP/lower-bound per instance), `analyze.py` (Wilcoxon for H1/H2), `plots.py` (boxplots, convergence), `layout.py` (shared campaign layout)
+- `data/` — benchmark task graphs (see `data/README.md`): `kasahara/` (10 real STG graphs spanning size/density), `synthetic/` (10 generated graphs, `make data`), `example.stg` (tiny MILP-demo graph), and `optima.csv` (published makespan references for the Kasahara graphs)
+- `tests/` — unit tests
+- `docs/` — project reports: `02_final.{tex,pdf}` (final report), `01_preliminary.{tex,pdf}` (preliminary documentation), plus `data/` and `politechnika.png` shared by both
