@@ -1,0 +1,25 @@
+% Editorial schematic (NOT data-driven): example dependency graph and its
+% decoded Gantt schedule. Hand-authored; not produced by report_figures.py.
+\begin{tikzpicture}[
+    task/.style={circle, draw, minimum size=9mm, inner sep=0pt, font=\small, align=center},
+    >={Stealth[length=2mm]}, edge/.style={->, draw=gray}, crit/.style={->, draw=colPMXC, very thick, dashed}]
+  \node[task] (A) at (0,1.0)   {A\\[-2pt]\tiny 2};
+  \node[task] (C) at (2.6,1.0) {C\\[-2pt]\tiny 3};
+  \node[task] (B) at (0,-1.0)  {B\\[-2pt]\tiny 4};
+  \node[task] (D) at (2.6,-1.0){D\\[-2pt]\tiny 4};
+  \draw[->, draw=gray, thick] (A)--(C);
+  \draw[crit] (B)--(C) node[midway, above left=-2pt, font=\tiny, text=colPMXC]{zasoby};
+\end{tikzpicture}
+\hspace{0.7cm}
+\begin{tikzpicture}[font=\small]
+  \def\gh{0.8}
+  \draw[->] (0,-0.25) -- (7.6,-0.25) node[right]{$t$};
+  \foreach \t in {0,...,7} \draw (\t,-0.2)--(\t,-0.3) node[below=-1pt]{\tiny\t};
+  \node[left] at (0,1.0+\gh/2) {\footnotesize P1};
+  \node[left] at (0,0.0+\gh/2) {\footnotesize P2};
+  \draw[fill=colOX!20] (0,1.0) rectangle (2,1.0+\gh) node[midway]{A};
+  \draw[fill=colOX!20] (2,1.0) rectangle (6,1.0+\gh) node[midway]{D};
+  \draw[fill=colPMXC!30] (0,0.0) rectangle (4,0.0+\gh) node[midway]{\bfseries B};
+  \draw[fill=colPMXC!30] (4,0.0) rectangle (7,0.0+\gh) node[midway]{\bfseries C};
+  \draw[dashed, colPMXC] (7,-0.25) -- (7,2.0) node[above]{\footnotesize $C_{max}=7$};
+\end{tikzpicture}

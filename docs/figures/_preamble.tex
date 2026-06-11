@@ -1,0 +1,18 @@
+% Shared figure styling for the report. \input from the main preamble, AFTER
+% xcolor/tikz/pgfplots are loaded. Both the report and the figure fragments in
+% this directory rely on the colours and the `wykres` style defined here.
+
+\definecolor{colOX}{HTML}{1F77B4}
+\definecolor{colPMX}{HTML}{FF7F0E}
+\definecolor{colOXC}{HTML}{2CA02C}
+\definecolor{colPMXC}{HTML}{D62728}
+
+\pgfplotsset{
+    wykres/.style={
+        width=0.92\textwidth, height=6.2cm,
+        tick label style={font=\small}, label style={font=\small},
+        legend style={font=\small, draw=none, fill=none},
+        grid=major, grid style={gray!18},
+        every axis plot/.append style={line width=1pt},
+    },
+}

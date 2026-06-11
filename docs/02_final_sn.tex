@@ -1,0 +1,357 @@
+%% Springer Nature LaTeX template (sn-jnl.cls). Build with pdflatex.
+%% Reference style: sn-mathphys, numbered citations.
+\documentclass[pdflatex,sn-mathphys,Numbered]{sn-jnl}
+
+%%%% Additional packages used by this report
+\usepackage[T1]{fontenc}
+\usepackage[polish]{babel}
+\usepackage{amsmath,amssymb}% sn-jnl.cls expects amsmath (\allowdisplaybreaks)
+\usepackage{manyfoot}% required by sn-jnl.cls footnote machinery
+\usepackage{booktabs}% sn-jnl.cls defines \toprule/\midrule but not \bottomrule
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots,statistics}
+
+%% graphicx, amsmath, amssymb, xcolor, hyperref, natbib and the A4 page
+%% geometry are already provided by sn-jnl.cls.
+
+% Figure colours and the shared pgfplots `wykres' style live with the figures.
+\input{figures/_preamble}
+
+\newcommand{\h}[1]{\par\medskip\noindent\textbf{#1}}
+
+\raggedbottom
+
+\begin{document}
+
+\title[Memetyczny algorytm harmonogramowania zadań]{Harmonogramowanie zadań w~środowisku wieloprocesorowym z~ograniczeniem pierwszeństwa: algorytm memetyczny z~lokalną optymalizacją ścieżki krytycznej}
+
+\author[1]{\fnm{Wojciech} \sur{Jasiński}}
+
+\author[1]{\fnm{Piotr} \sur{Iśtok}}
+
+\affil[1]{\orgname{Politechnika Warszawska}, \orgaddress{\city{Warszawa}, \country{Polska}}}
+
+\maketitle
+
+\sloppy
+
+% =====================================================================
+\section{Wprowadzenie i opis problemu}
+% =====================================================================
+\textbf{Motywacja.} Celem projektu jest opracowanie i~implementacja algorytmu ewolucyjnego dla
+problemu harmonogramowania zadań w~środowisku wieloprocesorowym z~ograniczeniem pierwszeństwa
+(\textit{ang. Task Scheduling Problem with Precedence Constraints}). Zadanie należy do klasy
+problemów NP-trudnych~\cite{ullman1975}, co uzasadnia wykorzystanie metaheurystyk.
+
+\h{Definicja formalna.} Problem zdefiniowano jako czwórkę $(T, p, l, M)$, gdzie:
+\begin{itemize}[itemsep=3pt, topsep=3pt]
+    \item $T = \{t_1, t_2, \dots, t_n\}$ jest zbiorem $n$ zadań do wykonania;
+    \item $p : T \times T \to \{0, 1\}$ koduje relację pierwszeństwa: $p(t_i, t_j) = 1$ oznacza, że zadanie $t_i$ musi zostać zakończone przed rozpoczęciem $t_j$. Zakładamy, że graf skierowany indukowany przez~$p$ jest acykliczny (DAG); w~przeciwnym razie zbiór rozwiązań dopuszczalnych jest pusty;
+    \item $l: T \to \mathbb{N}$ przypisuje każdemu zadaniu czas trwania;
+    \item $M \in \mathbb{N}$ jest stałą liczbą procesorów (grup), między które rozdzielamy zadania. Procesor wykonuje jedno zadanie naraz; nazwę „procesor'' stosujemy dla zgodności z~literaturą.
+\end{itemize}
+
+\noindent
+\textbf{Funkcja celu.} Wyzwaniem jest taki podział zadań między $M$ procesorów, by zachować
+wszystkie więzy pierwszeństwa i~zminimalizować czas zakończenia ostatniego zadania, czyli
+\textit{makespan} ($C_{max}$). Harmonogram optymalny przy pełnym wykorzystaniu zasobów kończy proces
+w~najkrótszym możliwym czasie. Przykład na rysunku~\ref{fig:przyklad} pokazuje graf zależności
+i~jego harmonogram.
+
+\begin{figure}[H]
+\centering
+\input{figures/01_example}
+\caption{Przykład ($M=2$; liczby w~węzłach to czasy trwania). Po lewej graf zależności
+(przerywana linia $B\!\to\!C$ to krawędź maszynowa, nie więz pierwszeństwa); po prawej
+harmonogram permutacji \texttt{[A,B,D,C]}. Start C opóźniony do $t=4$ przez zajętość P2, więc
+o~$C_{max}$ decyduje ścieżka maszynowa B$\to$C -- stąd CPM liczona na harmonogramie.}
+\label{fig:przyklad}
+\end{figure}
+
+% =====================================================================
+\section{Metoda}
+\label{sec:metoda}
+% =====================================================================
+\textbf{Ogólna koncepcja.} Zastosowano algorytm memetyczny~\cite{moscato1989}, który łączy
+klasyczne dla algorytmów genetycznych globalne przeszukiwanie przestrzeni rozwiązań z~optymalizacją
+lokalną opartą o~analizę ścieżki krytycznej. Podejście to ma zapobiegać powstawaniu wąskich gardeł
+w~harmonogramach.
+
+\h{Reprezentacja osobnika.} Osobnik koduje kolejność wykonywania zadań: chromosomem jest
+permutacja o~długości $|T|$, zawierająca wszystkie zadania w~kolejności priorytetu umieszczania
+w~harmonogramie. Reprezentacja nie zawiera bezpośredniego przydziału do procesorów -- wynika on
+z~działania dekodera. Każda permutacja zgodna z~porządkiem topologicznym koduje rozwiązanie
+dopuszczalne.
+
+\h{Dekoder (\textit{list scheduling}).} Zamianę chromosomu na harmonogram i~wyznaczenie jego czasu
+wykonuje zachłanny dekoder typu \textit{list scheduling}~\cite{graham1969}. Ponieważ procesory są
+nierozróżnialne, dekoder przydziela kolejne gotowe zadania (zgodnie z~priorytetem z~chromosomu)
+procesorom zwalniającym się najwcześniej, respektując relację pierwszeństwa~$p$. Wyliczone $C_{max}$
+stanowi wartość funkcji przystosowania. Dekoder udostępnia też pełny harmonogram (czasy
+rozpoczęcia/zakończenia oraz przydział do procesora), wykorzystywany przez moduł optymalizacji
+lokalnej.
+
+\h{Naprawa dopuszczalności (\textit{ready-list repair}).} Krzyżowanie i~mutacja mogą wygenerować
+permutacje niezgodne z~porządkiem topologicznym. Mechanizm naprawy oparty o~listę zadań gotowych
+przebudowuje chromosom do najbliższego porządku topologicznego, zachowując względną kolejność
+z~oryginalnej permutacji. Dzięki temu cała populacja pozostaje dopuszczalna i~nie trzeba karać
+rozwiązań niedopuszczalnych w~funkcji celu.
+
+\h{Operatory ewolucyjne.} Część ewolucyjną zaimplementowano w~oparciu o~bibliotekę
+DEAP~\cite{deap2012}.
+\begin{itemize}[itemsep=3pt, topsep=3pt]
+    \item \textbf{Selekcja:} turniejowa~\cite{miller1995}, zapobiegająca przedwczesnej dominacji pojedynczego osobnika.
+    \item \textbf{Krzyżowanie:} operatory permutacyjne unikające dublowania zadań. Porównano krzyżowanie porządkowe (OX)~\cite{davis1985}, zachowujące względną kolejność, z~krzyżowaniem z~częściowym mapowaniem (PMX)~\cite{goldberg1985}, opartym o~mieszanie pozycyjne.
+    \item \textbf{Mutacja:} operator zamiany (\textit{swap}) -- losowa zamiana miejscami dwóch zadań.
+\end{itemize}
+
+\h{Optymalizacja lokalna (CPM).} Kluczowym elementem metody memetycznej jest moduł oparty o~analizę
+ścieżki krytycznej~\cite{kelley1959}. W~odróżnieniu od klasycznej CPM liczonej na samym grafie
+zależności zastosowano \textbf{analizę świadomą harmonogramu}: ścieżkę krytyczną wyznaczamy na
+faktycznie zdekodowanym harmonogramie, śledząc na każdym kroku poprzednika z~relacji pierwszeństwa
+\emph{lub} z~zajętości procesora. Dzięki temu analiza wykrywa również wąskie gardła zasobowe
+i~różni się między osobnikami. Zadania krytyczne otrzymują wyższy priorytet (operacja
+\textit{pull-left}); jeśli poprawia to $C_{max}$, zmiana -- zgodnie z~ewolucją
+Lamarckowską~\cite{whitley1994} -- zastępuje poprzednika w~populacji.
+
+\h{Konfiguracje algorytmu.} Z~połączenia dwóch operatorów krzyżowania (OX/PMX) oraz obecności bądź
+braku modułu CPM powstają cztery porównywane konfiguracje: \texttt{ox}, \texttt{pmx} (czysty AE)
+oraz \texttt{ox\_cpm}, \texttt{pmx\_cpm} (pełny algorytm memetyczny).
+
+% =====================================================================
+\section{Plan eksperymentów}
+\label{sec:eksperymenty}
+% =====================================================================
+\textbf{Cel i hipotezy badawcze.} Eksperymenty oceniają jakość rozwiązań algorytmu oraz weryfikują
+dwie hipotezy:
+\begin{itemize}[itemsep=1pt, topsep=2pt, leftmargin=3em]
+    \item[(H1)] lokalna optymalizacja CPM istotnie obniża medianę $C_{max}$ względem czystego AE;
+    \item[(H2)] krzyżowanie OX istotnie dominuje nad PMX na grafach rzadkich ($|E|/|T|^2 < 0{,}1$).
+\end{itemize}
+
+\h{Zestawy testowe.} Jako instancje posłużyły grafy ze zbioru \textit{Standard Task Graph Set}
+(Kasahara Lab)~\cite{tobita2002} oraz grafy generowane syntetycznie, z~kontrolowaną liczbą zadań
+i~gęstością. Dla małych instancji ($|T| \leq 30$) wyznaczono rozwiązanie optymalne solverem MILP
+(CBC poprzez PuLP~\cite{mitchell2011}), co pozwala raportować lukę optymalizacyjną; dla większych odniesieniem jest dolne ograniczenie
+$LB = \max(\lceil \text{całkowita praca}/M \rceil,\ \text{ścieżka krytyczna})$.
+
+\h{Protokół statystyczny.} Dla każdej konfiguracji wykonano 15 niezależnych uruchomień (ziarna
+$0$--$14$). Jest to nieco mniej, niż pierwotnie planowano -- ograniczył nas długi czas obliczeń --
+jednak różnice pozostają istotne statystycznie. Pełna kampania (1200 uruchomień AE)
+zajęła około 17 godzin czasu CPU przy zrównolegleniu, a~wąskim gardłem były warianty CPM na
+największych i~najgęstszych instancjach. Miarą jakości jest najlepszy $C_{max}$
+na uruchomienie; raportujemy medianę. Istotność różnic weryfikowano sparowanym testem kolejności
+rangowanej Wilcoxona~\cite{wilcoxon1945} (implementacja \texttt{scipy}~\cite{virtanen2020}; te same
+ziarna), z~korekcją Holma w~obrębie każdej rodziny hipotez, $\alpha = 0{,}05$. Punktem odniesienia są heurystyki listowe HLFET~\cite{adam1974}
+i~MCP~\cite{wu1990} oraz czysty AE bez komponentu lokalnego.
+
+\h{Zastrzeżenie dot. budżetu (H1).} Konfiguracje memetyczne wykonują dodatkowe ewaluacje funkcji
+celu wewnątrz przeszukiwania CPM, dlatego porównanie prowadzimy przy równej liczbie \emph{pokoleń},
+a~nie przy równym budżecie ewaluacji. Przewaga CPM jest więc częściowo skutkiem większego
+efektywnego nakładu na pokolenie.
+
+\h{Hiperparametry.} Parametry AE są globalne (jednakowe dla wszystkich instancji). Wartości
+i~ich uzasadnienie -- zakresy ugruntowane w~literaturze algorytmów
+genetycznych oraz prac o~harmonogramowaniu zadań na grafach zależności~\cite{dejong1990,
+grefenstette1986, omara2010, hou1994} -- zestawia tabela~\ref{tab:hparams}. Ablacji hiperparametrów
+nie przeprowadzono.
+
+\begin{table}[ht]% [H] is unsupported by the class's table env (threeparttable)
+\centering\footnotesize\setlength{\tabcolsep}{6pt}
+\begin{tabular}{llp{8.4cm}}
+\toprule
+parametr & wartość & podstawa \\
+\midrule
+prawd. krzyżowania $p_c$ & $0{,}8$ & klasyczne $0{,}6$~\cite{dejong1990}--$0{,}9$~\cite{grefenstette1986}; GA dla DAG $0{,}65$--$0{,}95$~\cite{omara2010, hou1994} \\
+prawd. mutacji $p_m$ & $0{,}3$ & zamiana (\textit{swap}) na osobnika; GA permutacyjne $0{,}1$--$0{,}5$ \\
+populacja & $50$ & \cite{dejong1990}; powszechny zakres $30$--$100$ \\
+liczba pokoleń & $100$ & stały budżet (wspólna długość krzywych zbieżności) \\
+rozmiar turnieju & $3$ & łagodny nacisk selekcyjny~\cite{miller1995} \\
+próby CPM / osobnika & $20$ & budżet lokalnego przeszukiwania (warianty memetyczne) \\
+niezależne ziarna & $15$ & ograniczone czasem obliczeń; poniżej konwencji $30$ \\
+\bottomrule
+\end{tabular}
+\caption{Hiperparametry algorytmu i~ich uzasadnienie. Wartości są globalne dla wszystkich instancji.}
+\label{tab:hparams}
+\end{table}
+
+% =====================================================================
+\section{Wyniki}
+\label{sec:wyniki}
+% =====================================================================
+\textbf{Jakość rozwiązań.} Tabela~\ref{tab:main} zbiera medianę $C_{max}$ dla czterech konfiguracji
+wraz z~rozmiarem, gęstością i~odniesieniem. \texttt{pmx\_cpm} jest najlepsza lub równie dobra na
+każdej instancji i~dorównuje lub pokonuje heurystyki HLFET/MCP na 19 z~20 (przegrywa tylko na
+\texttt{robot\_t88}: mediana 697 vs 694, lecz najlepszy przebieg 671). Część instancji jest wymuszona -- każda konfiguracja
+osiąga ograniczenie (np. \texttt{rand0014\_t500}: wszyscy $893$).
+
+\begin{table}[ht]% [H] is unsupported by the class's table env (threeparttable)
+\centering\scriptsize\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+instancja & $|T|$ & gęstość & $M$ & ref. & HLFET/MCP & \texttt{ox} & \texttt{pmx} & \texttt{ox\_cpm} & \texttt{pmx\_cpm} \\
+\midrule
+\texttt{syn\_t15\_p010}       &  17 & 0{,}093 & 2 &  52 &   54 & \textbf{52}  & \textbf{52}  & \textbf{52}  & \textbf{52} \\
+\texttt{syn\_t22\_p018}       &  24 & 0{,}090 & 3 &  44 &   48 & 46           & 45           & \textbf{44}  & \textbf{44} \\
+\texttt{syn\_t30\_p030}       &  32 & 0{,}132 & 3 &  66 &   66 & \textbf{66}  & \textbf{66}  & \textbf{66}  & \textbf{66} \\
+\texttt{syn\_t40\_p006}       &  42 & 0{,}044 & 4 &  52 &   55 & 55           & \textbf{52}  & \textbf{52}  & \textbf{52} \\
+\texttt{syn\_t40\_p035}       &  42 & 0{,}157 & 4 & 108 &  108 & \textbf{108} & \textbf{108} & \textbf{108} & \textbf{108} \\
+\texttt{syn\_t60\_p005}       &  62 & 0{,}033 & 4 &  72 &   74 & 81           & 73           & \textbf{72}  & \textbf{72} \\
+\texttt{syn\_t60\_p015}       &  62 & 0{,}073 & 4 &  77 &   88 & 89           & 81           & 81           & \textbf{78} \\
+\texttt{syn\_t100\_p004}      & 102 & 0{,}024 & 4 & 126 &  126 & 128          & \textbf{126} & 127          & \textbf{126} \\
+\texttt{syn\_t100\_p012}      & 102 & 0{,}059 & 4 & 131 &  153 & 162          & 143          & 142          & \textbf{135} \\
+\texttt{syn\_t150\_p004}      & 152 & 0{,}022 & 4 & 230 &  241 & 234          & \textbf{230} & 232          & \textbf{230} \\
+\texttt{rand0000\_t50\_p008}  &  52 & 0{,}044 & 4 &  66 &   77 & 73           & 67           & \textbf{66}  & \textbf{66} \\
+\texttt{rand0093\_t50\_p078}  &  52 & 0{,}360 & 4 &  69 &   73 & \textbf{73}  & \textbf{73}  & \textbf{73}  & \textbf{73} \\
+\texttt{rand0063\_t100\_p002} & 102 & 0{,}017 & 4 & 136 &  137 & 137          & \textbf{136} & \textbf{136} & \textbf{136} \\
+\texttt{rand0173\_t100\_p039} & 102 & 0{,}187 & 4 & 199 &  218 & 228          & 214          & 212          & \textbf{206} \\
+\texttt{rand0071\_t300\_p001} & 302 & 0{,}006 & 4 & 423 &  428 & 425          & \textbf{423} & 424          & \textbf{423} \\
+\texttt{rand0000\_t300\_p016} & 302 & 0{,}080 & 4 & 448 &  505 & 531          & 503          & 512          & \textbf{470} \\
+\texttt{rand0014\_t500\_p020} & 502 & 0{,}098 & 8 & 893 &  893 & \textbf{893} & \textbf{893} & \textbf{893} & \textbf{893} \\
+\texttt{robot\_t88\_p003}     &  90 & 0{,}017 & 4 & 621 &  694 & 814          & 743          & 729          & \textbf{697} \\
+\texttt{sparse\_t96\_p001}    &  98 & 0{,}018 & 4 & 484 &  486 & 502          & 486          & 486          & \textbf{484} \\
+\texttt{fpppp\_t334\_p002}    & 336 & 0{,}011 & 4 &1783 & 1903 & 2067         & 1896         & 2017         & \textbf{1843} \\
+\bottomrule
+\end{tabular}
+\caption{Mediana $C_{max}$ wg konfiguracji (pogrubienie -- najlepsza na instancję). Odniesienie:
+optimum MILP dla $|T|\le 30$, w~pozostałych przypadkach dolne ograniczenie LB. Kolumna HLFET/MCP
+podaje wynik heurystyk listowych -- obie pokrywają się na każdej instancji.}
+\label{tab:main}
+\end{table}
+
+\textbf{Luka do dolnego ograniczenia (LB).} Rysunek~\ref{fig:gap} pokazuje lukę czterech konfiguracji do LB na
+reprezentatywnych instancjach: CPM obniża słupek, PMX leży poniżej OX, a~\texttt{pmx\_cpm} jest
+najniższy.
+
+\begin{figure}[H]
+\centering
+\input{figures/02_gap}
+\caption{Luka mediany $C_{max}$ do LB (\%) dla czterech konfiguracji.}
+\label{fig:gap}
+\end{figure}
+
+\textbf{H1 -- wpływ CPM.} CPM istotnie obniża medianę $C_{max}$ wszędzie tam, gdzie istnieje zapas:
+\textbf{25/25 istotnych testów na korzyść CPM-on, żaden przeciw} ($p_{\text{Holm}}\le 0{,}05$). Efekt
+rośnie z~trudnością instancji ($-85$ dla OX na \texttt{robot\_t88}). Zbieżność zbiorcza
+(rys.~\ref{fig:convagg}) -- średnia luka do LB po wszystkich 20 instancjach -- pokazuje, że warianty
+z~CPM zbiegają wyraźnie szybciej.
+
+\begin{figure}[H]
+\centering
+\input{figures/03_convergence_aggregate}
+\caption{Zbieżność zbiorcza: średnia luka do LB po wszystkich 20 instancjach. Warianty z~CPM
+spadają najszybciej; \texttt{pmx\_cpm} kończy najniżej (1,7\%).}
+\label{fig:convagg}
+\end{figure}
+
+\textbf{H2 -- OX vs PMX.} Hipoteza nie potwierdza się -- zachodzi relacja przeciwna. Na każdej
+nieremisowej instancji PMX istotnie pokonuje OX: na 20 instancjach PMX wygrywa 15 razy, remisuje 5,
+a~OX nie wygrywa nigdy; remisy występują tylko tam, gdzie oba operatory
+osiągają ograniczenie. Marginesy bywają duże na trudnych grafach rzeczywistych (\texttt{fpppp}:
+$-171$, \texttt{robot\_t88}: $-71$). Prawdopodobny powód: naprawa listy gotowych już wymusza
+pierwszeństwo, więc atut OX w~zachowaniu kolejności jest stłumiony, a~pozycyjne mieszanie PMX
+skuteczniej przeszukuje przestrzeń priorytetów. Różnice luki widać na rys.~\ref{fig:gap}, gdzie
+słupek PMX leży poniżej słupka OX na każdej instancji.
+
+\textbf{Rozrzut.} Boxploty (rys.~\ref{fig:box}) pokazują rozrzut po ziarnach: \texttt{pmx\_cpm} jest
+nie tylko najniższy, ale i~najwęższy.
+
+\begin{figure}[H]
+\centering
+\input{figures/04_boxplots}
+\caption{Rozrzut $C_{max}$ po 15 ziarnach. \texttt{pmx\_cpm} -- najniższy i~najwęższy.}
+\label{fig:box}
+\end{figure}
+
+\textbf{Ujęcie zbiorcze.} Rysunek~\ref{fig:agg} porządkuje konfiguracje średnią luką do LB --
+osobno dla wszystkich instancji, grafów gęstych i~rzadkich. W~każdym podziale CPM obniża lukę, PMX
+leży poniżej OX, a~\texttt{pmx\_cpm} jest najlepszy. Efekt CPM jest wyraźnie silniejszy na grafach
+rzadkich (OX $9{,}2\%$ wobec \texttt{pmx\_cpm} $1{,}6\%$) niż na gęstych, gdzie część instancji jest
+wymuszona i~różnice się spłaszczają.
+
+\begin{figure}[H]
+\centering
+\input{figures/05_aggregate_gap}
+\caption{Średnia luka do LB wg konfiguracji: wszystkie instancje, grafy gęste i~rzadkie. CPM obniża
+lukę w~każdym podziale; przewaga CPM jest największa na grafach rzadkich.}
+\label{fig:agg}
+\end{figure}
+
+\textbf{Koszt obliczeniowy.} Rysunek~\ref{fig:cpuscatter} przedstawia średni czas CPU uruchomienia
+w~funkcji rozmiaru instancji (skala log--log). Czysty AE i~warianty memetyczne tworzą dwie
+równoległe chmury: koszt obu rośnie potęgowo z~rozmiarem w~zbliżonym tempie, lecz CPM dokłada do
+każdego pokolenia powtórne dekodowanie harmonogramu, co przekłada się na w~przybliżeniu \emph{stały
+współczynnik} (krotność) kosztu -- równoległe proste w~skali log--log -- stąd warianty memetyczne są
+o~rzędy wielkości droższe na całym zakresie.
+
+\begin{figure}[H]
+\centering
+\input{figures/06_cpu_time}
+\caption{Czas CPU vs liczba zadań (skala log--log). Markery -- pomiary, linie -- dopasowanie
+potęgowe $t=a\,|T|^{b}$.}
+\label{fig:cpuscatter}
+\end{figure}
+
+% =====================================================================
+\section{Dyskusja i wnioski}
+\label{sec:wnioski}
+% =====================================================================
+\begin{itemize}[itemsep=3pt, topsep=3pt]
+    \item \textbf{Najlepsza metoda to \texttt{pmx\_cpm}.} Nie wystarczy stwierdzić, że AE z~CPM jest
+    dobry. Najlepsze wyniki daje konkretne połączenie PMX z~lokalnym przeszukiwaniem CPM. Wariant ten
+    jest najlepszy lub remisuje na każdej z~20 instancji i~dorównuje lub pokonuje HLFET/MCP na 19
+    z~nich.
+    \item \textbf{H1 potwierdzona, ale z~ważnym zastrzeżeniem.} CPM istotnie obniża $C_{max}$
+    (25/25 testów), lecz porównanie wykonano przy równej liczbie pokoleń, a~nie przy równym budżecie
+    ewaluacji. Przewaga CPM może wynikać z~większego nakładu obliczeniowego na jedno pokolenie.
+    \item \textbf{H2 odrzucona w~stronę przeciwną.} Na grafach rzadkich nie dominuje OX, tylko PMX
+    (0/14 istotnych testów za OX). Jest to praktyczny wynik potwierdzający przeciwną hipotezę:
+    w~tej reprezentacji i~dekoderze PMX jest bezpieczniejszym wyborem operatora od OX.
+    \item \textbf{Prawdopodobna przyczyna przewagi PMX.} Naprawa listą zadań gotowych już wymusza
+    dopuszczalny porządek topologiczny, więc atut OX w~zachowaniu kolejności zostaje osłabiony.
+    Pozycyjne mieszanie PMX skuteczniej eksploruje przestrzeń rozwiązań.
+    \item \textbf{Najtrudniejsza instancja: \texttt{robot\_t88}.} Mediana \texttt{pmx\_cpm}=697
+    przegrywa tu nieznacznie z~HLFET/MCP=694, choć najlepszy przebieg \texttt{pmx\_cpm}=671 jest lepszy.
+    Pokazuje to, że metoda nie dominuje prostych heurystyk w~każdym sensie statystycznym.
+    \item \textbf{Wyniki należy czytać przez pryzmat instancji z~zapasem.} Część grafów jest wymuszona:
+    wszystkie konfiguracje osiągają LB, więc nie wnoszą sygnału o~przewadze operatorów. Najważniejsze
+    różnice pojawiają się na instancjach trudnych, gdzie \texttt{pmx\_cpm} realnie zmniejsza lukę.
+    \item \textbf{PMX jest rekomendacją praktyczną dla tego dekodera.} Przewaga PMX nie musi oznaczać
+    uniwersalnej dominacji tego operatora, lecz wynika z~połączenia reprezentacji priorytetowej,
+    naprawy ready-list i~dekodera listowego. W~tym układzie PMX jest najlepszym wyborem, a~sam PMX
+    bez CPM jest zaskakująco konkurencyjny wobec OX z~CPM.
+    \item \textbf{Jakość ma koszt obliczeniowy.} CPM daje najlepsze harmonogramy, ale zwiększa liczbę
+    ewaluacji i~dominuje czas działania na dużych lub gęstych grafach -- warianty memetyczne są o~rząd
+    do dwóch rzędów wielkości droższe od czystego AE (rys.~\ref{fig:cpuscatter}). Najważniejszym
+    kolejnym krokiem jest więc porównanie przy równym budżecie ewaluacji oraz tańsza, budżetowana
+    wersja lokalnego przeszukiwania.
+\end{itemize}
+
+\begin{thebibliography}{99}
+\bibitem{moscato1989} P.~Moscato, \textit{On Evolution, Search, Optimization, Genetic Algorithms and Martial Arts: Towards Memetic Algorithms}, Caltech Concurrent Computation Program, Report C3P 826, 1989.
+\bibitem{graham1969} R.~L. Graham, \textit{Bounds on multiprocessing timing anomalies}, SIAM Journal on Applied Mathematics, vol.~17, no.~2, pp.~416--429, 1969.
+\bibitem{davis1985} L.~Davis, \textit{Applying adaptive algorithms to epistatic domains}, w: Proc. IJCAI, pp.~162--164, 1985.
+\bibitem{goldberg1985} D.~E. Goldberg, R.~Lingle, \textit{Alleles, loci, and the traveling salesman problem}, w: Proc. 1st Int. Conf. on Genetic Algorithms, pp.~154--159, 1985.
+\bibitem{kelley1959} J.~E. Kelley, M.~R. Walker, \textit{Critical-path planning and scheduling}, w: Proc. Eastern Joint Computer Conference, pp.~160--173, 1959.
+\bibitem{tobita2002} T.~Tobita, H.~Kasahara, \textit{A standard task graph set for fair evaluation of multiprocessor scheduling algorithms}, Journal of Scheduling, vol.~5, no.~5, pp.~379--394, 2002.
+\bibitem{adam1974} T.~L. Adam, K.~M. Chandy, J.~R. Dickson, \textit{A comparison of list schedules for parallel processing systems}, Communications of the ACM, vol.~17, no.~12, pp.~685--690, 1974.
+\bibitem{wu1990} M.-Y. Wu, D.~D. Gajski, \textit{Hypertool: A programming aid for message-passing systems}, IEEE TPDS, vol.~1, no.~3, pp.~330--343, 1990.
+\bibitem{wilcoxon1945} F.~Wilcoxon, \textit{Individual comparisons by ranking methods}, Biometrics Bulletin, vol.~1, no.~6, pp.~80--83, 1945.
+\bibitem{deap2012} F.-A. Fortin \textit{et al.}, \textit{DEAP: Evolutionary algorithms made easy}, JMLR, vol.~13, pp.~2171--2175, 2012.
+\bibitem{ullman1975} J.~D. Ullman, \textit{NP-complete scheduling problems}, J. Computer and System Sciences, vol.~10, no.~3, pp.~384--393, 1975.
+\bibitem{miller1995} B.~L. Miller, D.~E. Goldberg, \textit{Genetic algorithms, tournament selection, and the effects of noise}, Complex Systems, vol.~9, no.~3, pp.~193--212, 1995.
+\bibitem{whitley1994} D.~Whitley, V.~S. Gordon, K.~Mathias, \textit{Lamarckian evolution, the Baldwin effect and function optimization}, w: PPSN III, LNCS 866, Springer, pp.~6--15, 1994.
+\bibitem{virtanen2020} P.~Virtanen \textit{et al.}, \textit{SciPy 1.0: Fundamental algorithms for scientific computing in Python}, Nature Methods, vol.~17, pp.~261--272, 2020.
+\bibitem{mitchell2011} S.~Mitchell, M.~O'Sullivan, I.~Dunning, \textit{PuLP: A linear programming toolkit for Python}, Univ. of Auckland, 2011.
+\bibitem{dejong1990} K.~A. De Jong, W.~M. Spears, \textit{An analysis of the interacting roles of population size and crossover in genetic algorithms}, w: PPSN I, LNCS 496, Springer, pp.~38--47, 1990.
+\bibitem{grefenstette1986} J.~J. Grefenstette, \textit{Optimization of control parameters for genetic algorithms}, IEEE Trans. Systems, Man, and Cybernetics, vol.~16, no.~1, pp.~122--128, 1986.
+\bibitem{omara2010} F.~A. Omara, M.~M. Arafa, \textit{Genetic algorithms for task scheduling problem}, Journal of Parallel and Distributed Computing, vol.~70, no.~1, pp.~13--22, 2010.
+\bibitem{hou1994} E.~S.~H. Hou, N.~Ansari, H.~Ren, \textit{A genetic algorithm for multiprocessor scheduling}, IEEE Transactions on Parallel and Distributed Systems, vol.~5, no.~2, pp.~113--120, 1994.
+\end{thebibliography}
+
+\end{document}
