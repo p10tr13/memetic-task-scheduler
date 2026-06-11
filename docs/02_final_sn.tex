@@ -112,7 +112,7 @@ DEAP~\cite{deap2012}.
 
 \h{Optymalizacja lokalna (CPM).} Kluczowym elementem metody memetycznej jest moduł oparty o~analizę
 ścieżki krytycznej~\cite{kelley1959}. W~odróżnieniu od klasycznej CPM liczonej na samym grafie
-zależności zastosowano \textbf{analizę świadomą harmonogramu}: ścieżkę krytyczną wyznaczamy na
+zależności zastosowano analizę świadomą harmonogramu: ścieżkę krytyczną wyznaczamy na
 faktycznie zdekodowanym harmonogramie, śledząc na każdym kroku poprzednika z~relacji pierwszeństwa
 \emph{lub} z~zajętości procesora. Dzięki temu analiza wykrywa również wąskie gardła zasobowe
 i~różni się między osobnikami. Zadania krytyczne otrzymują wyższy priorytet (operacja
@@ -236,7 +236,7 @@ najniższy.
 \end{figure}
 
 \textbf{H1 -- wpływ CPM.} CPM istotnie obniża medianę $C_{max}$ wszędzie tam, gdzie istnieje zapas:
-\textbf{25/25 istotnych testów na korzyść CPM-on, żaden przeciw} ($p_{\text{Holm}}\le 0{,}05$). Efekt
+25/25 istotnych testów na korzyść CPM-on, żaden przeciw ($p_{\text{Holm}}\le 0{,}05$). Efekt
 rośnie z~trudnością instancji ($-85$ dla OX na \texttt{robot\_t88}). Zbieżność zbiorcza
 (rys.~\ref{fig:convagg}) -- średnia luka do LB po wszystkich 20 instancjach -- pokazuje, że warianty
 z~CPM zbiegają wyraźnie szybciej.
@@ -331,6 +331,15 @@ potęgowe $t=a\,|T|^{b}$.}
     kolejnym krokiem jest więc porównanie przy równym budżecie ewaluacji oraz tańsza, budżetowana
     wersja lokalnego przeszukiwania.
 \end{itemize}
+
+% =====================================================================
+\section{Wykorzystanie dużych modeli językowych}
+% =====================================================================
+Przy pisaniu tej dokumentacji korzystaliśmy z~dużych modeli językowych (LLM).
+Pomogły nam one przy: przejrzeniu tekstu i~zebraniu uwag, poprawkach językowych
+i~gramatycznych, formatowaniu tekstu oraz wykresów (kod TikZ/pgfplots), a~także
+przy zbudowaniu i~sprawdzeniu spisu literatury. Wszystkie fragmenty wygenerowane
+lub zmodyfikowane w~ten sposób zostały przez nas zweryfikowane.
 
 \begin{thebibliography}{99}
 \bibitem{moscato1989} P.~Moscato, \textit{On Evolution, Search, Optimization, Genetic Algorithms and Martial Arts: Towards Memetic Algorithms}, Caltech Concurrent Computation Program, Report C3P 826, 1989.

@@ -420,7 +420,7 @@ def _pgf_aggregate_gap(data: dict) -> str:
     body = "\n".join(panels)
     return f"""{_generated_banner()}\\begin{{tikzpicture}}
 \\begin{{groupplot}}[group style={{group size=3 by 1, horizontal sep=1.0cm}},
-    width=0.32\\textwidth, height=5.2cm, ybar, ymin=0, ymax=10,
+    width=0.32\\textwidth, height=4.16cm, ybar, ymin=0, ymax=10,
     symbolic x coords={{{symbolic}}}, xtick={{{symbolic}}}, enlarge x limits=0.18,
     x tick label style={{rotate=25, anchor=east, font=\\footnotesize}},
     tick label style={{font=\\footnotesize}},
@@ -543,7 +543,7 @@ def _pgf_cpu(  # pylint: disable=too-many-locals
     point_body = "\n".join(point_lines)
     return f"""{_generated_banner()}\\begin{{tikzpicture}}
 \\begin{{axis}}[
-    width=0.92\\textwidth, height=7.2cm, xmode=log, ymode=log,
+    width=0.92\\textwidth, height=4.32cm, xmode=log, ymode=log,
     xlabel={{liczba zadań $|T|$}}, ylabel={{średni czas CPU / uruchomienie [s]}},
     tick label style={{font=\\small}}, label style={{font=\\small}},
     grid=major, grid style={{gray!18}},
