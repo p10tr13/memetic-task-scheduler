@@ -256,9 +256,12 @@ konfiguracje prowadzimy do tego samego \emph{budżetu ewaluacji funkcji celu}
 $B = 5050$ dekodowań harmonogramu (tyle zużywa czysty AE przy populacji $50$
 i~$100$ pokoleniach: $50\times(100+1)$). Każdy przebieg zatrzymujemy na granicy
 pokolenia po~osiągnięciu~$B$. Dzięki temu wariant memetyczny wykonuje mniej
-pokoleń, ale tyle samo ewaluacji co~AE -- różnice jakości nie wynikają już
-z~większego nakładu. Dla porównania przytaczamy też wcześniejsze wyniki przy
-równej liczbie pokoleń.
+pokoleń, ale w~przybliżeniu tyle samo ewaluacji co~AE -- różnice jakości nie
+wynikają już z~większego nakładu. Ponieważ jedno pokolenie wariantu memetycznego
+to wiele ewaluacji, warianty te nieznacznie przekraczają budżet (średnio ok.~5650
+wobec 5070 ewaluacji czystego AE) -- dostają więc \emph{nieco więcej}, a~nie mniej
+nakładu, co czyni wniosek o~przewadze czystego AE konserwatywnym. Dla porównania
+przytaczamy też wcześniejsze wyniki przy równej liczbie pokoleń.
 
 \paragraph{Protokół statystyczny.}
 Dla każdej konfiguracji wykonano 15 niezależnych uruchomień (ziarna $0$--$14$);
@@ -361,17 +364,57 @@ i~MCP są identyczne; nie jest to błąd, lecz efekt dekodera niewrażliwego na~
 akurat różnice priorytetów.
 
 \paragraph{H1 -- wpływ CPM przy równym budżecie.}
-Hipoteza H1 \emph{nie potwierdza się} w~uczciwym porównaniu. Na 40 testach (2~operatory
-$\times$ 20 instancji) istotnych jest 18: CPM pomaga w~10, ale \emph{szkodzi w~8}
-($p_{\text{Holm}}\le 0{,}05$). Co istotne, wszystkie 8~przypadków pogorszenia
-dotyczą \emph{silniejszego} operatora PMX na trudniejszych grafach -- np.
-\texttt{fpppp} ($\Delta=-142$, $p_{\text{Holm}}=0{,}023$), \texttt{robot\_t88}
-($-61$, $0{,}023$), \texttt{rand0000\_t300} ($-10$, $0{,}023$). CPM nadal pomaga
-\emph{słabszemu} OX, gdzie lokalne przeszukiwanie nadrabia braki eksploracji.
-Zbieżność zbiorcza w~funkcji liczby ewaluacji (rys.~\ref{fig:convevals}) pokazuje
-mechanizm: przy tym samym budżecie czysty \texttt{pmx} schodzi najniżej, bo
-przeznacza wszystkie ewaluacje na~eksplorację wielu pokoleń, podczas gdy
-\texttt{pmx\_cpm} zużywa budżet na intensyfikację w~niewielu pokoleniach.
+Hipoteza H1 \emph{nie potwierdza się} w~uczciwym porównaniu (tabela~\ref{tab:h1}).
+Na 40 testach (2~operatory $\times$ 20 instancji) istotnych jest 18: CPM pomaga
+w~10, ale \emph{szkodzi w~8} ($p_{\text{Holm}}\le 0{,}05$). Wszystkie 8~przypadków
+pogorszenia dotyczą \emph{silniejszego} operatora PMX; praktycznie istotne
+($|\Delta|\ge 5$) jest przy tym pięć większych pogorszeń -- \texttt{fpppp}
+($\Delta=-142$), \texttt{robot\_t88} ($-61$), \texttt{rand0000\_t300} ($-10$),
+\texttt{rand0173} ($-7$), \texttt{syn\_t100\_p012} ($-5$) -- a~pozostałe trzy to
+różnice $1$--$2$ jednostek. CPM pomaga natomiast \emph{słabszemu} OX (10~istotnych
+testów, wszystkie na~korzyść CPM), gdzie lokalne przeszukiwanie nadrabia braki
+eksploracji. Zbieżność zbiorcza w~funkcji liczby ewaluacji
+(rys.~\ref{fig:convevals}) pokazuje mechanizm: przy tym samym budżecie czysty
+\texttt{pmx} schodzi najniżej, bo przeznacza wszystkie ewaluacje na~eksplorację
+wielu pokoleń, podczas gdy \texttt{pmx\_cpm} zużywa budżet na intensyfikację
+w~niewielu pokoleniach.
+
+\begin{table}[ht]
+\centering\scriptsize\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lrrrr}
+\toprule
+& \multicolumn{2}{c}{OX} & \multicolumn{2}{c}{PMX} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+instancja & $\Delta$ & $p_{\text{Holm}}$ & $\Delta$ & $p_{\text{Holm}}$ \\
+\midrule
+\texttt{syn\_t15\_p010} & +0 & 1.000 & +0 & 1.000 \\
+\texttt{syn\_t22\_p018} & \textbf{+1} & \textbf{0.030} & +1 & 0.095 \\
+\texttt{syn\_t30\_p030} & +0 & 1.000 & +0 & 1.000 \\
+\texttt{syn\_t40\_p006} & \textbf{+2} & \textbf{0.020} & +0 & 1.000 \\
+\texttt{syn\_t40\_p035} & +0 & 1.000 & +0 & 1.000 \\
+\texttt{syn\_t60\_p005} & \textbf{+4} & \textbf{0.027} & $-2$ & \textbf{0.027} \\
+\texttt{syn\_t60\_p015} & \textbf{+5} & \textbf{0.023} & $-1$ & \textbf{0.034} \\
+\texttt{rand0000\_t50\_p008} & \textbf{+4} & \textbf{0.028} & $-1$ & \textbf{0.030} \\
+\texttt{rand0093\_t50\_p078} & +0 & 1.000 & +0 & 1.000 \\
+\texttt{rand0063\_t100\_p002} & +1 & 0.148 & +0 & 1.000 \\
+\texttt{rand0173\_t100\_p039} & \textbf{+3} & \textbf{0.023} & $-7$ & \textbf{0.023} \\
+\texttt{syn\_t100\_p004} & \textbf{+1} & \textbf{0.033} & +0 & 1.000 \\
+\texttt{syn\_t100\_p012} & \textbf{+12} & \textbf{0.023} & $-5$ & \textbf{0.048} \\
+\texttt{syn\_t150\_p004} & +1 & 0.095 & $-1$ & 0.095 \\
+\texttt{rand0071\_t300\_p001} & +1 & 0.086 & +0 & 0.867 \\
+\texttt{rand0000\_t300\_p016} & \textbf{+8} & \textbf{0.023} & $-10$ & \textbf{0.023} \\
+\texttt{robot\_t88\_p003} & +9 & 0.178 & $-61$ & \textbf{0.023} \\
+\texttt{sparse\_t96\_p001} & \textbf{+8} & \textbf{0.023} & $-4$ & 1.000 \\
+\texttt{fpppp\_t334\_p002} & +3 & 0.307 & $-142$ & \textbf{0.023} \\
+\texttt{rand0014\_t500\_p020} & +0 & 1.000 & +0 & 1.000 \\
+\bottomrule
+\end{tabular}
+\caption{H1 -- test Wilcoxona CPM-on vs CPM-off, osobno dla~OX i~PMX.
+$\Delta = \text{mediana}_{\text{off}} - \text{mediana}_{\text{on}}$ (dodatnie =
+CPM pomaga). Pogrubienie -- istotne po~korekcji Holma ($p_{\text{Holm}}<0{,}05$).
+Dla~PMX wszystkie istotne różnice są ujemne (CPM szkodzi).}
+\label{tab:h1}
+\end{table}
 
 \begin{figure}[H]
 \centering
@@ -394,13 +437,51 @@ a~nie lepszej metody.
 
 \paragraph{H2 -- OX vs PMX.}
 Hipoteza H2 również się nie potwierdza i~zachodzi relacja przeciwna, niezależnie
-od~budżetu. PMX istotnie pokonuje OX na każdej nieremisowej instancji: na~20
-instancjach PMX wygrywa 15 razy (14 istotnych), remisuje 5, a~OX nie wygrywa nigdy;
-remisy występują tam, gdzie oba operatory osiągają ograniczenie. Prawdopodobny
-mechanizm: naprawa listą gotowych (Algorytm~\ref{alg:repair}) już wymusza
-dopuszczalny porządek, więc atut OX w~zachowaniu kolejności jest stłumiony, podczas
-gdy pozycyjne mieszanie PMX skuteczniej przeszukuje przestrzeń priorytetów. Jest to
-hipoteza wyjaśniająca obserwację, nie wynik osobnego eksperymentu ablacyjnego.
+od~budżetu (tabela~\ref{tab:h2}). Na~16 grafach rzadkich -- do~których odnosi się
+hipoteza -- PMX pokonuje OX 14 razy (istotnie w~13, jedyny nieistotny wynik to
+\texttt{syn\_t22}, $p_{\text{Holm}}=0{,}052$), remisuje 2 razy, a~OX nie wygrywa
+nigdy. Ten sam wzorzec utrzymuje się na~wszystkich 20 instancjach: 15 zwycięstw PMX
+(14 istotnych), 5 remisów, 0 dla~OX; remisy występują tam, gdzie oba operatory
+osiągają ograniczenie. Prawdopodobny mechanizm: naprawa listą gotowych
+(Algorytm~\ref{alg:repair}) już wymusza dopuszczalny porządek, więc atut OX
+w~zachowaniu kolejności jest stłumiony, podczas gdy pozycyjne mieszanie PMX
+skuteczniej przeszukuje przestrzeń priorytetów. Jest to hipoteza wyjaśniająca
+obserwację, nie wynik osobnego eksperymentu ablacyjnego.
+
+\begin{table}[ht]
+\centering\scriptsize\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lrrrrr}
+\toprule
+instancja & gęstość & \texttt{ox} & \texttt{pmx} & $\Delta$ & $p_{\text{Holm}}$ \\
+\midrule
+\texttt{fpppp\_t334\_p002} & 0.011 & 2067 & 1894 & \textbf{$-173$} & \textbf{0.011} \\
+\texttt{rand0000\_t300\_p016} & 0.080 & 531 & 502 & \textbf{$-29$} & \textbf{0.011} \\
+\texttt{rand0000\_t50\_p008} & 0.044 & 73 & 67 & \textbf{$-6$} & \textbf{0.011} \\
+\texttt{rand0014\_t500\_p020} & 0.098 & 893 & 893 & +0 & 1.000 \\
+\texttt{rand0063\_t100\_p002} & 0.017 & 137 & 136 & \textbf{$-1$} & \textbf{0.006} \\
+\texttt{rand0071\_t300\_p001} & 0.006 & 425 & 423 & \textbf{$-2$} & \textbf{0.011} \\
+\texttt{rand0093\_t50\_p078} & 0.360 & 73 & 73 & +0 & 1.000 \\
+\texttt{rand0173\_t100\_p039} & 0.186 & 227 & 213 & \textbf{$-14$} & \textbf{0.011} \\
+\texttt{robot\_t88\_p003} & 0.017 & 814 & 741 & \textbf{$-73$} & \textbf{0.011} \\
+\texttt{sparse\_t96\_p001} & 0.018 & 502 & 486 & \textbf{$-16$} & \textbf{0.011} \\
+\texttt{syn\_t100\_p004} & 0.024 & 128 & 126 & \textbf{$-2$} & \textbf{0.011} \\
+\texttt{syn\_t100\_p012} & 0.059 & 162 & 142 & \textbf{$-20$} & \textbf{0.011} \\
+\texttt{syn\_t150\_p004} & 0.021 & 234 & 230 & \textbf{$-4$} & \textbf{0.011} \\
+\texttt{syn\_t15\_p010} & 0.093 & 52 & 52 & +0 & 1.000 \\
+\texttt{syn\_t22\_p018} & 0.090 & 46 & 45 & $-1$ & 0.052 \\
+\texttt{syn\_t30\_p030} & 0.132 & 66 & 66 & +0 & 1.000 \\
+\texttt{syn\_t40\_p006} & 0.044 & 55 & 52 & \textbf{$-3$} & \textbf{0.009} \\
+\texttt{syn\_t40\_p035} & 0.157 & 108 & 108 & +0 & 1.000 \\
+\texttt{syn\_t60\_p005} & 0.033 & 81 & 73 & \textbf{$-8$} & \textbf{0.011} \\
+\texttt{syn\_t60\_p015} & 0.073 & 89 & 81 & \textbf{$-8$} & \textbf{0.011} \\
+\bottomrule
+\end{tabular}
+\caption{H2 -- test Wilcoxona OX vs PMX (czysty AE, równy budżet).
+$\Delta = \text{mediana}_{\text{pmx}} - \text{mediana}_{\text{ox}}$ (ujemne =
+PMX lepszy). Pogrubienie -- istotne po~korekcji Holma. PMX nie przegrywa
+z~OX na~żadnej instancji.}
+\label{tab:h2}
+\end{table}
 
 \paragraph{Rozrzut i ujęcie zbiorcze.}
 Boxploty (rys.~\ref{fig:box}) potwierdzają, że \texttt{pmx} jest nie tylko
@@ -473,8 +554,9 @@ czyli samo strojenie ogranicza udział lokalnego przeszukiwania.
     słabszemu OX. Jest to też morał metodyczny: porównania metaheurystyk należy
     prowadzić przy równym budżecie funkcji celu.
     \item \textbf{H2 odrzucona w~stronę przeciwną.} Na grafach rzadkich nie
-    dominuje OX, lecz PMX (0/… testów za~OX, niezależnie od~budżetu). W~tej
-    reprezentacji i~dekoderze PMX jest bezpieczniejszym wyborem operatora.
+    dominuje OX, lecz PMX (0 z~13 istotnych testów rzadkich przemawia za~OX,
+    niezależnie od~budżetu). W~tej reprezentacji i~dekoderze PMX jest
+    bezpieczniejszym wyborem operatora.
     \item \textbf{Strojenie pomaga, ale nie zmienia wniosków.} Optymalizacja
     hiperparametrów (Optuna, walidacja na~zbiorze niewidzianym) istotnie poprawia
     wyniki, najbardziej dla~OX, lecz ranking pozostaje ten sam -- czysty PMX jest
