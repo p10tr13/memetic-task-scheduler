@@ -77,6 +77,11 @@ DATA_RELPATH = "figures/data"
 
 FIGURE_NAMES = ("gap", "convergence_aggregate", "boxplots", "aggregate_gap", "cpu_time")
 
+# Equal-budget figures need ``convergence_evals.csv`` (written only by
+# equal-budget campaigns), so they are opt-in via ``--figure`` and excluded from
+# the default "all" set, which must keep working on older campaigns.
+EVAL_FIGURE_NAMES = ("convergence_evals",)
+
 # Output basename per figure, prefixed with its number in the report (the
 # hand-authored example schematic is figure 01 and is not generated here).
 FIGURE_FILES = {
@@ -85,6 +90,7 @@ FIGURE_FILES = {
     "boxplots": "04_boxplots",
     "aggregate_gap": "05_aggregate_gap",
     "cpu_time": "06_cpu_time",
+    "convergence_evals": "07_convergence_evals",
 }
 
 
@@ -118,6 +124,7 @@ def _load_campaign(campaign: Path) -> dict:
         "best_makespans": _load_best_makespans(campaign),
         "density": _load_density(campaign),
         "convergence": _load_convergence(campaign),
+        "convergence_evals": _load_convergence_evals(campaign),
         "reference": _load_reference(campaign),
         "timing": _load_timing(campaign),
         "nodes": _load_node_counts(campaign),
@@ -171,11 +178,7 @@ def _load_reference(campaign: Path) -> dict[str, int]:
 
 def _baselines(campaign: Path) -> dict[str, dict]:
     """Reads every ``baselines/*.json`` keyed by instance name."""
-    baselines: dict[str, dict] = {}
-    for path in sorted(layout.baselines_dir(campaign).glob("*.json")):
-        row = layout.read_json(path)
-        baselines[row["instance"]] = row
-    return baselines
+    return layout.read_baselines(campaign)
 
 
 def _load_convergence(campaign: Path) -> dict[tuple[str, str], list[float]]:
@@ -195,6 +198,32 @@ def _load_convergence(campaign: Path) -> dict[tuple[str, str], list[float]]:
             for generation in sorted(values)
         ]
         for key, values in indexed.items()
+    }
+
+
+def _load_convergence_evals(
+    campaign: Path,
+) -> dict[tuple[str, str], list[list[tuple[int, int]]]]:
+    """Loads per-seed ``(evaluations, best_makespan)`` curves per (instance, config).
+
+    Unlike :func:`_load_convergence`, seeds are kept separate (not averaged): the
+    curves are sampled at different evaluation counts per run, so they must be
+    resampled onto a shared evaluation grid before averaging. Returns ``{}`` when
+    the campaign has no ``convergence_evals.csv`` (e.g. an older, non-equal-budget
+    campaign), so the rest of the figures still load.
+    """
+    indexed: dict[tuple[str, str], dict[int, list[tuple[int, int]]]] = {}
+    for conv_csv in sorted(layout.runs_dir(campaign).glob("*/convergence_evals.csv")):
+        with conv_csv.open(encoding="utf-8") as convergence_file:
+            for row in csv.DictReader(convergence_file):
+                key = (row["instance"], row["config"])
+                seed_curve = indexed.setdefault(key, {}).setdefault(
+                    int(row["seed"]), []
+                )
+                seed_curve.append((int(row["evaluations"]), int(row["best_makespan"])))
+    return {
+        key: [sorted(seeds[seed]) for seed in sorted(seeds)]
+        for key, seeds in indexed.items()
     }
 
 
@@ -280,6 +309,57 @@ def _aggregate_convergence(data: dict) -> list[list[float]]:
     return rows
 
 
+def _aggregate_convergence_evals(  # pylint: disable=too-many-locals
+    data: dict, points: int = 40
+) -> list[list[float]]:
+    """Budget-fair convergence: mean gap-to-reference (%) vs objective evaluations.
+
+    Each seed's best-so-far curve is a step function of evaluations, so it is
+    resampled onto a shared evaluation grid (bounded by the smallest last-eval
+    across all runs so every curve covers the grid), averaged over seeds, then
+    over instances. Returns rows ``[evaluations, ox, pmx, ox_cpm, pmx_cpm]``.
+    """
+    curves = data["convergence_evals"]
+    reference = data["reference"]
+    if not curves:
+        return []
+
+    instances = sorted({instance for instance, _config in curves})
+    seed_curves = [curve for series in curves.values() for curve in series if curve]
+    lower = max(curve[0][0] for curve in seed_curves)
+    upper = min(curve[-1][0] for curve in seed_curves)
+    grid = [round(lower + (upper - lower) * i / (points - 1)) for i in range(points)]
+
+    rows: list[list[float]] = []
+    for evaluations in grid:
+        row: list[float] = [evaluations]
+        for config in CONFIG_ORDER:
+            gaps = []
+            for instance in instances:
+                series = curves.get((instance, config))
+                if not series:
+                    continue
+                mean_best = statistics.mean(
+                    _best_at(curve, evaluations) for curve in series
+                )
+                gaps.append(
+                    100.0 * (mean_best - reference[instance]) / reference[instance]
+                )
+            row.append(round(statistics.mean(gaps), 3) if gaps else 0.0)
+        rows.append(row)
+    return rows
+
+
+def _best_at(curve: list[tuple[int, int]], evaluations: int) -> int:
+    """Best makespan reached by ``evaluations`` (step-interpolating the curve)."""
+    best = curve[0][1]
+    for sample_evals, sample_best in curve:
+        if sample_evals > evaluations:
+            break
+        best = sample_best
+    return best
+
+
 def _cpu_rows(data: dict) -> list[list[float]]:
     """CPU-time table rows ``[tasks, ox, pmx, ox_cpm, pmx_cpm]`` sorted by size."""
     timing = data["timing"]
@@ -325,6 +405,7 @@ def _write_pgfplots(data: dict, outdir: Path, only: str) -> list[Path]:
         "aggregate_gap": lambda: _pgf_aggregate_gap(data),
         "boxplots": lambda: _pgf_boxplots(data),
         "convergence_aggregate": lambda: _pgf_convergence(data, data_dir, written),
+        "convergence_evals": lambda: _pgf_convergence_evals(data, data_dir, written),
         "cpu_time": lambda: _pgf_cpu(data, data_dir, written),
     }
     for name in _selected(only):
@@ -502,6 +583,37 @@ def _pgf_convergence(data: dict, data_dir: Path, written: list[Path]) -> str:
 """
 
 
+def _pgf_convergence_evals(data: dict, data_dir: Path, written: list[Path]) -> str:
+    """Writes ``conv_evals_aggregate.dat`` and the budget-fair convergence body."""
+    rows = _aggregate_convergence_evals(data)
+    if not rows:
+        raise SystemExit(
+            "No convergence_evals.csv found - run an --equal-budget campaign first."
+        )
+    dat = data_dir / "conv_evals_aggregate.dat"
+    _write_dat(dat, ["evals", *CONFIG_ORDER], rows)
+    written.append(dat)
+
+    plots = []
+    for config in CONFIG_ORDER:
+        plots.append(
+            f"\\addplot[{PGF_COLORS[config]}, thick] "
+            f"table[x=evals, y={config}] {{{DATA_RELPATH}/conv_evals_aggregate.dat}};"
+        )
+    legend = ",".join(TEX_LABELS[config] for config in CONFIG_ORDER)
+    body = "\n".join(plots)
+    return f"""{_generated_banner()}\\begin{{tikzpicture}}
+\\begin{{axis}}[wykres, height=5.6cm, xlabel={{ewaluacje funkcji celu}},
+    ylabel={{średnia luka do LB [\\%]}},
+    xmin={rows[0][0]}, xmax={rows[-1][0]}, ymin=0, legend pos=north east,
+    legend style={{font=\\footnotesize}}]
+{body}
+\\legend{{{legend}}}
+\\end{{axis}}
+\\end{{tikzpicture}}
+"""
+
+
 def _pgf_cpu(  # pylint: disable=too-many-locals
     data: dict, data_dir: Path, written: list[Path]
 ) -> str:
@@ -583,6 +695,7 @@ def _write_matplotlib(data: dict, outdir: Path, only: str) -> list[Path]:
         "aggregate_gap": _mpl_aggregate_gap,
         "boxplots": _mpl_boxplots,
         "convergence_aggregate": _mpl_convergence,
+        "convergence_evals": _mpl_convergence_evals,
         "cpu_time": _mpl_cpu,
     }
     for name in _selected(only):
@@ -686,6 +799,32 @@ def _mpl_convergence(plt, data: dict, path: Path) -> None:
     _save(plt, figure, path)
 
 
+def _mpl_convergence_evals(plt, data: dict, path: Path) -> None:
+    """Renders the budget-fair convergence curves (gap vs evaluations)."""
+    rows = _aggregate_convergence_evals(data)
+    if not rows:
+        raise SystemExit(
+            "No convergence_evals.csv found - run an --equal-budget campaign first."
+        )
+    evaluations = [row[0] for row in rows]
+    figure, axes = plt.subplots(figsize=(8, 4))
+    for index, config in enumerate(CONFIG_ORDER, start=1):
+        axes.plot(
+            evaluations,
+            [row[index] for row in rows],
+            label=config,
+            color=MPL_COLORS[config],
+            linewidth=1.5,
+        )
+    axes.set_xlim(rows[0][0], rows[-1][0])
+    axes.set_ylim(bottom=0)
+    axes.set_xlabel("ewaluacje funkcji celu")
+    axes.set_ylabel("średnia luka do LB [%]")
+    axes.grid(color="0.85")
+    axes.legend(loc="upper right")
+    _save(plt, figure, path)
+
+
 def _mpl_cpu(plt, data: dict, path: Path) -> None:
     """Renders the log-log CPU-time scatter with power-law fits."""
     rows = _cpu_rows(data)
@@ -749,9 +888,10 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--figure",
-        choices=("all", *FIGURE_NAMES),
+        choices=("all", *FIGURE_NAMES, *EVAL_FIGURE_NAMES),
         default="all",
-        help="Which figure to (re)generate (default: all).",
+        help="Which figure to (re)generate (default: all; the equal-budget "
+        f"figures {EVAL_FIGURE_NAMES} are opt-in).",
     )
     return parser.parse_args(argv)
 

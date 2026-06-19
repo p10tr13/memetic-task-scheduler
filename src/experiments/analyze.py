@@ -10,10 +10,20 @@ under a campaign directory and produces:
   per instance), Holm-corrected, testing hypothesis H1;
 - ``h2_wilcoxon.csv`` — paired Wilcoxon tests of OX vs PMX (pure EA, per
   instance), Holm-corrected, testing hypothesis H2 with sparse/dense labels.
+- ``h3_wilcoxon.csv`` — only when ``--compare-campaign`` is given: paired Wilcoxon
+  tests of the tuned campaign (``--campaign``) against the default-parameter
+  campaign (``--compare-campaign``) per (instance, config), Holm-corrected,
+  testing H3 (Optuna-tuned params beat the literature defaults).
 
 Run from the repository root, pointing at a campaign directory::
 
     python -m src.experiments.analyze --campaign results/0607_1105
+
+For H3, point ``--campaign`` at the tuned run and ``--compare-campaign`` at the
+default run (both over the same instances/seeds)::
+
+    python -m src.experiments.analyze --campaign results/tuned \\
+        --compare-campaign results/default
 """
 
 import argparse
@@ -61,6 +71,17 @@ H2_FIELDS = [
     "holm_p",
     "significant",
 ]
+H3_FIELDS = [
+    "instance",
+    "config",
+    "median_default",
+    "median_tuned",
+    "delta_median",
+    "better",
+    "wilcoxon_p",
+    "holm_p",
+    "significant",
+]
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -80,6 +101,18 @@ def main(argv: list[str] | None = None) -> None:
 
     _print_overview(h1_rows, h2_rows)
     print(f"Wrote summary/h1_wilcoxon/h2_wilcoxon to {campaign}")
+
+    if arguments.compare_campaign is not None:
+        h3_rows = _h3_rows(runs, _load_runs(arguments.compare_campaign))
+        layout.write_csv(campaign / "h3_wilcoxon.csv", H3_FIELDS, h3_rows)
+        tuned_wins = sum(
+            1 for row in h3_rows if row["significant"] and row["better"] == "tuned"
+        )
+        significant = sum(1 for row in h3_rows if row["significant"])
+        print(
+            f"H3 (tuned vs default): {tuned_wins}/{significant} significant tests "
+            f"favour tuned -> {campaign / 'h3_wilcoxon.csv'}"
+        )
 
 
 def _load_runs(campaign: Path) -> dict[tuple[str, str], list[int]]:
@@ -104,11 +137,7 @@ def _load_runs(campaign: Path) -> dict[tuple[str, str], list[int]]:
 
 def _load_baselines(campaign: Path) -> dict[str, dict]:
     """Loads the baseline payload per instance from ``baselines/*.json``."""
-    baselines: dict[str, dict] = {}
-    for path in sorted(layout.baselines_dir(campaign).glob("*.json")):
-        row = layout.read_json(path)
-        baselines[row["instance"]] = row
-    return baselines
+    return layout.read_baselines(campaign)
 
 
 def _instances_in_order(runs: dict[tuple[str, str], list[int]]) -> list[str]:
@@ -217,6 +246,51 @@ def _h2_rows(
     return rows
 
 
+def _h3_rows(
+    tuned: dict[tuple[str, str], list[int]],
+    default: dict[tuple[str, str], list[int]],
+) -> list[dict]:
+    """Builds Holm-corrected tuned-vs-default rows (H3) per (instance, config).
+
+    Pairs each (instance, config) cell shared by both campaigns (same seeds in
+    seed order) and tests whether the tuned parameters lower the best makespan.
+    """
+    rows: list[dict] = []
+    for key in sorted(tuned):
+        if key not in default:
+            continue
+        tuned_values = tuned[key]
+        default_values = default[key]
+        if len(tuned_values) != len(default_values):
+            continue
+        instance, config = key
+        median_tuned = statistics.median(tuned_values)
+        median_default = statistics.median(default_values)
+        rows.append(
+            {
+                "instance": instance,
+                "config": config,
+                "median_default": median_default,
+                "median_tuned": median_tuned,
+                "delta_median": median_default - median_tuned,
+                "better": _better_label(median_default, median_tuned),
+                "wilcoxon_p": round(_wilcoxon_p(default_values, tuned_values), 4),
+            }
+        )
+
+    _apply_holm(rows)
+    return rows
+
+
+def _better_label(median_default: float, median_tuned: float) -> str:
+    """Returns which parameter set reached the lower median makespan."""
+    if median_tuned < median_default:
+        return "tuned"
+    if median_default < median_tuned:
+        return "default"
+    return "tie"
+
+
 def _density_class(density: float) -> str:
     """Classifies an instance as sparse or dense by the H2 threshold."""
     return "sparse" if density < SPARSE_DENSITY_THRESHOLD else "dense"
@@ -285,6 +359,13 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     """Parses command-line arguments."""
     parser = argparse.ArgumentParser(description="Analyse the experiment campaign.")
     layout.add_campaign_args(parser, required=True)
+    parser.add_argument(
+        "--compare-campaign",
+        type=Path,
+        default=None,
+        help="Default-parameter campaign to compare against for H3 "
+        "(tuned vs default); --campaign is the tuned run.",
+    )
     return parser.parse_args(argv)
 
 

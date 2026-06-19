@@ -3,11 +3,42 @@
 from src.experiments import layout
 from src.experiments.analyze import (
     _h1_rows,
+    _h3_rows,
     _holm_adjusted,
     _load_baselines,
     _load_runs,
     _wilcoxon_p,
 )
+
+
+def test_h3_rows_flag_tuned_improvement() -> None:
+    # 15 seeds, as in the real campaign (n must be large enough for Wilcoxon to
+    # be able to reach significance at all).
+    tuned = {
+        ("inst", "pmx_cpm"): [90] * 15,
+        ("inst", "ox"): [50] * 15,
+    }
+    default = {
+        ("inst", "pmx_cpm"): [100] * 15,
+        ("inst", "ox"): [50] * 15,
+    }
+
+    rows = {row["config"]: row for row in _h3_rows(tuned, default)}
+
+    assert rows["pmx_cpm"]["better"] == "tuned"
+    assert rows["pmx_cpm"]["delta_median"] == 10
+    assert rows["pmx_cpm"]["significant"] is True
+    # An all-equal cell is a tie and not significant.
+    assert rows["ox"]["better"] == "tie"
+    assert rows["ox"]["significant"] is False
+
+
+def test_h3_rows_skip_cells_missing_from_default() -> None:
+    tuned = {("inst", "pmx"): [1, 2, 3]}
+    default = {("other", "pmx"): [1, 2, 3]}
+
+    assert _h3_rows(tuned, default) == []
+
 
 _RUN_FIELDS = [
     "instance",

@@ -110,6 +110,22 @@ QUICK_GRAPHS = {
     "quick_dense": Graph(processors=3, synthetic=(20, 0.3, 3)),
 }
 
+# Held-out split for hyperparameter tuning: Optuna optimises on TUNE_INSTANCES
+# only, and the tuned-vs-default comparison is reported on the disjoint
+# VALIDATION_INSTANCES the search never saw, so the comparison is not circular.
+# The tune set is deliberately diverse (small->medium size, sparse->dense, both
+# synthetic and Kasahara families) yet excludes the 300-500 task graphs that make
+# each trial expensive.
+TUNE_INSTANCES = (
+    "syn_t15_p010",
+    "syn_t30_p030",
+    "syn_t40_p035",
+    "syn_t60_p015",
+    "rand0000_t50_p008",
+    "rand0173_t100_p039",
+)
+VALIDATION_INSTANCES = tuple(name for name in GRAPHS if name not in set(TUNE_INSTANCES))
+
 _INDEX = {**GRAPHS, **QUICK_GRAPHS}
 
 

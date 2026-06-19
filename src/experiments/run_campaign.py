@@ -276,8 +276,7 @@ def _merge_subcells(campaign, instances: list[str], seeds: list[int]) -> None:
                 seed
                 for seed in seeds
                 if (
-                    layout.subcell_dir(campaign, instance, label, seed)
-                    / "runs.csv"
+                    layout.subcell_dir(campaign, instance, label, seed) / "runs.csv"
                 ).exists()
             ]
             if not present:
@@ -302,9 +301,7 @@ def _merge_one_cell(campaign, instance: str, label: str, seeds: list[int]) -> No
     config["seed_start"] = min(seeds)
     config["seeds"] = len(seeds)
     layout.write_json(cell / "config.json", config)
-    layout.write_json(
-        cell / "timing.json", _merge_timing(instance, label, sub_dirs)
-    )
+    layout.write_json(cell / "timing.json", _merge_timing(instance, label, sub_dirs))
 
 
 def _read_csv(path) -> list[dict]:
@@ -324,12 +321,7 @@ def _merge_timing(instance: str, label: str, sub_dirs: list) -> dict:
         "schema_version": run_single.SCHEMA_VERSION,
         "instance": instance,
         "label": label,
-        "per_seed_seconds": wall,
-        "total_seconds": round(sum(wall), 4),
-        "mean_seconds": round(sum(wall) / len(wall), 4) if wall else 0.0,
-        "per_seed_cpu_seconds": cpu,
-        "total_cpu_seconds": round(sum(cpu), 4),
-        "mean_cpu_seconds": round(sum(cpu) / len(cpu), 4) if cpu else 0.0,
+        **run_single.timing_seconds_fields(wall, cpu),
         "merged_from_subcells": len(sub_dirs),
     }
 

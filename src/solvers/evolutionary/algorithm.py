@@ -46,7 +46,7 @@ __all__ = [
 ]
 
 
-def run_evolution(
+def run_evolution(  # pylint: disable=too-many-locals
     problem_instance: ProblemInstance,
     config: EvolutionConfig,
     strategies: EvolutionStrategies | None = None,

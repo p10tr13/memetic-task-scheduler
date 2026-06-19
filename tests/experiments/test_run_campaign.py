@@ -50,10 +50,33 @@ def test_merge_subcells_concatenates_seed_rows(tmp_path) -> None:
         run_campaign.run_single.write_cell(
             sub,
             {"label": label, "seeds": 1, "seed_start": seed},
-            [{"instance": "inst", "config": label, "seed": seed, "best_makespan": 10 + seed}],
-            [{"instance": "inst", "config": label, "seed": seed, "generation": 0, "best_makespan": 12}],
+            [
+                {
+                    "instance": "inst",
+                    "config": label,
+                    "seed": seed,
+                    "best_makespan": 10 + seed,
+                }
+            ],
+            [
+                {
+                    "instance": "inst",
+                    "config": label,
+                    "seed": seed,
+                    "generation": 0,
+                    "best_makespan": 12,
+                }
+            ],
             {"per_seed_seconds": [1.0], "per_seed_cpu_seconds": [0.5]},
-            [{"instance": "inst", "config": label, "seed": seed, "evaluations": 50, "best_makespan": 10 + seed}],
+            [
+                {
+                    "instance": "inst",
+                    "config": label,
+                    "seed": seed,
+                    "evaluations": 50,
+                    "best_makespan": 10 + seed,
+                }
+            ],
         )
 
     run_campaign._merge_subcells(campaign, ["inst"], [0, 1])

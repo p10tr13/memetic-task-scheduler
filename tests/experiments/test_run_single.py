@@ -114,7 +114,9 @@ def test_write_cell_writes_evaluation_convergence(tmp_path) -> None:
         }
     ]
 
-    run_single.write_cell(cell, {"label": "ox"}, [], [], {"total_seconds": 0.0}, eval_rows)
+    run_single.write_cell(
+        cell, {"label": "ox"}, [], [], {"total_seconds": 0.0}, eval_rows
+    )
 
     with (cell / "convergence_evals.csv").open(encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))

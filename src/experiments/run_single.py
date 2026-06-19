@@ -221,9 +221,7 @@ def _execute(
     (``process_time``) so the saved timing stays meaningful even when cells run
     concurrently; only the EA call itself is timed, not I/O or setup.
     """
-    strategies = build_strategies(
-        args.crossover, args.cpm, args.local_search_attempts
-    )
+    strategies = build_strategies(args.crossover, args.cpm, args.local_search_attempts)
     base_config = EvolutionConfig(
         population_size=args.population,
         generations=args.generations,
@@ -254,9 +252,7 @@ def _execute(
             _convergence_rows(entry, args, seed, result.generation_best_makespans)
         )
         cell_run.convergence_eval_rows.extend(
-            _convergence_eval_rows(
-                entry, args, seed, result.evaluation_best_makespans
-            )
+            _convergence_eval_rows(entry, args, seed, result.evaluation_best_makespans)
         )
 
     return cell_run
@@ -360,23 +356,34 @@ def _timing_payload(
     under the original names); ``*_cpu_seconds`` count only on-core time and stay
     comparable across cells even when the campaign runs cells concurrently.
     """
-    wall = cell_run.per_seed_wall_seconds
-    cpu = cell_run.per_seed_cpu_seconds
     return {
         "schema_version": SCHEMA_VERSION,
         "instance": entry.name,
         "label": args.label,
+        **timing_seconds_fields(
+            cell_run.per_seed_wall_seconds, cell_run.per_seed_cpu_seconds
+        ),
+        "started_utc": cell_run.started_utc,
+    }
+
+
+def timing_seconds_fields(wall: list[float], cpu: list[float]) -> dict:
+    """Returns the per-seed/total/mean wall and CPU second fields of a timing payload.
+
+    Shared by the per-cell writer and the campaign's sub-cell merge so the timing
+    schema has a single definition.
+    """
+    return {
         "per_seed_seconds": wall,
         "total_seconds": round(sum(wall), 4),
         "mean_seconds": round(sum(wall) / len(wall), 4) if wall else 0.0,
         "per_seed_cpu_seconds": cpu,
         "total_cpu_seconds": round(sum(cpu), 4),
         "mean_cpu_seconds": round(sum(cpu) / len(cpu), 4) if cpu else 0.0,
-        "started_utc": cell_run.started_utc,
     }
 
 
-def write_cell(
+def write_cell(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     cell: Path,
     config_payload: dict,
     run_rows: list[dict],

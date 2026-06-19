@@ -13,7 +13,7 @@ LocalSearchStrategy = Callable[[ProblemInstance, Sequence[int]], Individual]
 
 
 @dataclass(frozen=True)
-class EvolutionConfig:
+class EvolutionConfig:  # pylint: disable=too-many-instance-attributes
     """Stores evolutionary algorithm configuration.
 
     Args:

@@ -97,6 +97,15 @@ def read_json(path: Path) -> dict:
         return json.load(json_file)
 
 
+def read_baselines(campaign: Path) -> dict[str, dict]:
+    """Reads every ``baselines/*.json`` of a campaign, keyed by instance name."""
+    baselines: dict[str, dict] = {}
+    for path in sorted(baselines_dir(campaign).glob("*.json")):
+        row = read_json(path)
+        baselines[row["instance"]] = row
+    return baselines
+
+
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict]) -> None:
     """Writes rows to a CSV file with the given header."""
     path.parent.mkdir(parents=True, exist_ok=True)
