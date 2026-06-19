@@ -4,7 +4,6 @@ from src.experiments import layout
 from src.experiments.analyze import (
     _h1_rows,
     _h3_rows,
-    _holm_adjusted,
     _load_baselines,
     _load_runs,
     _wilcoxon_p,
@@ -54,10 +53,20 @@ _RUN_FIELDS = [
 ]
 
 
-def test_holm_adjusted_is_monotone_and_scaled() -> None:
-    adjusted = _holm_adjusted([0.01, 0.04, 0.03])
+def test_h1_rows_significant_uses_raw_pvalue() -> None:
+    # 15 seeds: CPM-on consistently 1 unit better -> raw Wilcoxon p well below 0.05.
+    runs = {
+        ("inst", "ox"): [10] * 15,
+        ("inst", "ox_cpm"): [9] * 15,
+        ("inst", "pmx"): [8] * 15,
+        ("inst", "pmx_cpm"): [8] * 15,
+    }
 
-    assert adjusted == [0.03, 0.06, 0.06]
+    rows = {row["crossover"]: row for row in _h1_rows(runs)}
+
+    assert "holm_p" not in rows["ox"]
+    assert rows["ox"]["significant"] is True  # delta +1, raw p < 0.05
+    assert rows["pmx"]["significant"] is False  # tie, p = 1.0
 
 
 def test_wilcoxon_p_is_one_for_identical_samples() -> None:

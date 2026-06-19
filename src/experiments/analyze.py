@@ -7,13 +7,16 @@ under a campaign directory and produces:
   instance x configuration (gap vs the MILP optimum where proven, otherwise vs
   the lower bound);
 - ``h1_wilcoxon.csv`` — paired Wilcoxon tests of CPM-on vs CPM-off (per crossover
-  per instance), Holm-corrected, testing hypothesis H1;
+  per instance), testing hypothesis H1;
 - ``h2_wilcoxon.csv`` — paired Wilcoxon tests of OX vs PMX (pure EA, per
-  instance), Holm-corrected, testing hypothesis H2 with sparse/dense labels.
+  instance), testing hypothesis H2 with sparse/dense labels.
 - ``h3_wilcoxon.csv`` — only when ``--compare-campaign`` is given: paired Wilcoxon
   tests of the tuned campaign (``--campaign``) against the default-parameter
-  campaign (``--compare-campaign``) per (instance, config), Holm-corrected,
-  testing H3 (Optuna-tuned params beat the literature defaults).
+  campaign (``--compare-campaign``) per (instance, config), testing H3
+  (Optuna-tuned params beat the literature defaults).
+
+Significance uses the raw per-instance Wilcoxon p-value (no multiple-comparison
+correction); it is read together with the effect size, not on its own.
 
 Run from the repository root, pointing at a campaign directory::
 
@@ -56,7 +59,6 @@ H1_FIELDS = [
     "median_cpm_on",
     "delta_median",
     "wilcoxon_p",
-    "holm_p",
     "significant",
 ]
 H2_FIELDS = [
@@ -68,7 +70,6 @@ H2_FIELDS = [
     "delta_median",
     "better",
     "wilcoxon_p",
-    "holm_p",
     "significant",
 ]
 H3_FIELDS = [
@@ -79,7 +80,6 @@ H3_FIELDS = [
     "delta_median",
     "better",
     "wilcoxon_p",
-    "holm_p",
     "significant",
 ]
 
@@ -192,7 +192,7 @@ def _gap_percent(value: float, reference: int) -> float:
 
 
 def _h1_rows(runs: dict[tuple[str, str], list[int]]) -> list[dict]:
-    """Builds Holm-corrected CPM-on vs CPM-off rows (H1)."""
+    """Builds CPM-on vs CPM-off rows (H1) with raw Wilcoxon p-values."""
     rows: list[dict] = []
     for instance in _instances_in_order(runs):
         for crossover in ("ox", "pmx"):
@@ -211,7 +211,7 @@ def _h1_rows(runs: dict[tuple[str, str], list[int]]) -> list[dict]:
                 }
             )
 
-    _apply_holm(rows)
+    _mark_significant(rows)
     return rows
 
 
@@ -219,7 +219,7 @@ def _h2_rows(
     runs: dict[tuple[str, str], list[int]],
     baselines: dict[str, dict],
 ) -> list[dict]:
-    """Builds Holm-corrected OX vs PMX rows (H2), labelled by density."""
+    """Builds OX vs PMX rows (H2), labelled by density, with raw Wilcoxon p."""
     rows: list[dict] = []
     for instance in _instances_in_order(runs):
         ox_values = runs.get((instance, "ox"))
@@ -242,7 +242,7 @@ def _h2_rows(
             }
         )
 
-    _apply_holm(rows)
+    _mark_significant(rows)
     return rows
 
 
@@ -250,7 +250,7 @@ def _h3_rows(
     tuned: dict[tuple[str, str], list[int]],
     default: dict[tuple[str, str], list[int]],
 ) -> list[dict]:
-    """Builds Holm-corrected tuned-vs-default rows (H3) per (instance, config).
+    """Builds tuned-vs-default rows (H3) per (instance, config), raw Wilcoxon p.
 
     Pairs each (instance, config) cell shared by both campaigns (same seeds in
     seed order) and tests whether the tuned parameters lower the best makespan.
@@ -278,7 +278,7 @@ def _h3_rows(
             }
         )
 
-    _apply_holm(rows)
+    _mark_significant(rows)
     return rows
 
 
@@ -313,26 +313,15 @@ def _wilcoxon_p(values_a: list[int], values_b: list[int]) -> float:
     return float(wilcoxon(values_a, values_b).pvalue)
 
 
-def _apply_holm(rows: list[dict]) -> None:
-    """Adds Holm-adjusted p-values and significance flags to test rows."""
-    raw_pvalues = [row["wilcoxon_p"] for row in rows]
-    holm_pvalues = _holm_adjusted(raw_pvalues)
-    for row, holm_p in zip(rows, holm_pvalues):
-        row["holm_p"] = round(holm_p, 4)
-        row["significant"] = holm_p < SIGNIFICANCE_LEVEL
+def _mark_significant(rows: list[dict]) -> None:
+    """Flags each test significant at the raw Wilcoxon p-value (no correction).
 
-
-def _holm_adjusted(pvalues: list[float]) -> list[float]:
-    """Holm step-down adjustment of a family of p-values."""
-    count = len(pvalues)
-    ascending = sorted(range(count), key=lambda index: pvalues[index])
-    adjusted = [0.0] * count
-    running_max = 0.0
-    for rank, index in enumerate(ascending):
-        candidate = min(1.0, (count - rank) * pvalues[index])
-        running_max = max(running_max, candidate)
-        adjusted[index] = running_max
-    return adjusted
+    Per-instance tests are reported as-is, without a multiple-comparison
+    correction; significance is read alongside the effect size (delta_median),
+    not on its own.
+    """
+    for row in rows:
+        row["significant"] = row["wilcoxon_p"] < SIGNIFICANCE_LEVEL
 
 
 def _print_overview(h1_rows: list[dict], h2_rows: list[dict]) -> None:
