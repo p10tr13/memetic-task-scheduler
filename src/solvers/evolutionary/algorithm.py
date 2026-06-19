@@ -5,6 +5,7 @@ import random
 
 from deap import tools
 
+from src.core.decoder import get_eval_count, reset_eval_counter, start_eval_counter
 from src.core.models import ProblemInstance
 from src.solvers.evolutionary.config import (
     CrossoverStrategy,
@@ -74,34 +75,71 @@ def run_evolution(
         _resolve_strategies(selected_strategies, config.tournament_size)
     )
 
-    population = getattr(toolbox, "population")(n=config.population_size)
-    hall_of_fame = tools.HallOfFame(1)
-    generation_best_makespans: list[int] = []
+    counter_token = start_eval_counter()
+    try:
+        population = getattr(toolbox, "population")(n=config.population_size)
+        hall_of_fame = tools.HallOfFame(1)
+        generation_best_makespans: list[int] = []
+        evaluation_best_makespans: list[tuple[int, int]] = []
 
-    evaluate_population(population, toolbox)
-    hall_of_fame.update(population)
-    generation_best_makespans.append(int(hall_of_fame[0].fitness.values[0]))
-
-    for _ in range(config.generations):
-        offspring = selected_strategy(population, len(population))
-        clone = getattr(toolbox, "clone")
-        offspring = [clone(individual) for individual in offspring]
-
-        _apply_crossover(offspring, selected_crossover, config.crossover_probability)
-        _apply_mutation(offspring, selected_mutation, config.mutation_probability)
-        _apply_repair(offspring, problem_instance)
-        _apply_local_search(offspring, selected_local_search, problem_instance)
-        evaluate_population(offspring, toolbox)
-
-        population = offspring
+        evaluate_population(population, toolbox)
         hall_of_fame.update(population)
-        generation_best_makespans.append(int(hall_of_fame[0].fitness.values[0]))
+        _record_generation(
+            hall_of_fame, generation_best_makespans, evaluation_best_makespans
+        )
 
-    return EvolutionResult(
-        best_permutation=list(hall_of_fame[0]),
-        best_makespan=int(hall_of_fame[0].fitness.values[0]),
-        generation_best_makespans=generation_best_makespans,
-    )
+        for _ in range(config.generations):
+            if (
+                config.max_evaluations is not None
+                and get_eval_count() >= config.max_evaluations
+            ):
+                break
+
+            offspring = selected_strategy(population, len(population))
+            clone = getattr(toolbox, "clone")
+            offspring = [clone(individual) for individual in offspring]
+
+            _apply_crossover(
+                offspring, selected_crossover, config.crossover_probability
+            )
+            _apply_mutation(offspring, selected_mutation, config.mutation_probability)
+            _apply_repair(offspring, problem_instance)
+            _apply_local_search(offspring, selected_local_search, problem_instance)
+            evaluate_population(offspring, toolbox)
+
+            population = offspring
+            hall_of_fame.update(population)
+            _record_generation(
+                hall_of_fame, generation_best_makespans, evaluation_best_makespans
+            )
+
+        return EvolutionResult(
+            best_permutation=list(hall_of_fame[0]),
+            best_makespan=int(hall_of_fame[0].fitness.values[0]),
+            generation_best_makespans=generation_best_makespans,
+            total_evaluations=get_eval_count(),
+            evaluation_best_makespans=evaluation_best_makespans,
+        )
+    finally:
+        reset_eval_counter(counter_token)
+
+
+def _record_generation(
+    hall_of_fame: tools.HallOfFame,
+    generation_best_makespans: list[int],
+    evaluation_best_makespans: list[tuple[int, int]],
+) -> None:
+    """Records the current best makespan against both generation and eval axes.
+
+    Args:
+        hall_of_fame: Hall of fame holding the best individual so far.
+        generation_best_makespans: Per-generation best-makespan curve to append to.
+        evaluation_best_makespans: ``(cumulative_evaluations, best_makespan)`` curve
+            to append to, sampling the evaluation counter at this boundary.
+    """
+    best_makespan = int(hall_of_fame[0].fitness.values[0])
+    generation_best_makespans.append(best_makespan)
+    evaluation_best_makespans.append((get_eval_count(), best_makespan))
 
 
 def _resolve_strategies(

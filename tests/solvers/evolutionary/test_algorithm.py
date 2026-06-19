@@ -39,6 +39,59 @@ def test_run_evolution_returns_valid_result() -> None:
     assert len(result.generation_best_makespans) == 4
 
 
+def test_run_evolution_tracks_evaluations() -> None:
+    problem_instance = _create_independent_instance()
+
+    result = run_evolution(
+        problem_instance=problem_instance,
+        config=EvolutionConfig(
+            population_size=6,
+            generations=3,
+            crossover_probability=1.0,
+            mutation_probability=1.0,
+            random_seed=1,
+        ),
+    )
+
+    # The initial population is fully evaluated, so the first eval-curve sample
+    # is exactly the population size, and one sample is recorded per generation
+    # boundary (initial + each generation).
+    assert result.evaluation_best_makespans[0][0] == 6
+    assert len(result.evaluation_best_makespans) == len(
+        result.generation_best_makespans
+    )
+    evaluations = [evals for evals, _ in result.evaluation_best_makespans]
+    makespans = [makespan for _, makespan in result.evaluation_best_makespans]
+    assert evaluations == sorted(evaluations)
+    assert makespans == sorted(makespans, reverse=True)
+    assert result.total_evaluations == evaluations[-1] >= 6
+
+
+def test_run_evolution_stops_at_evaluation_budget() -> None:
+    problem_instance = _create_independent_instance()
+    shared = dict(
+        population_size=6,
+        crossover_probability=1.0,
+        mutation_probability=1.0,
+        random_seed=4,
+    )
+
+    uncapped = run_evolution(
+        problem_instance=problem_instance,
+        config=EvolutionConfig(generations=50, **shared),
+    )
+    capped = run_evolution(
+        problem_instance=problem_instance,
+        config=EvolutionConfig(generations=50, max_evaluations=20, **shared),
+    )
+
+    # The budget stops the run far short of the generation cap, after the first
+    # generation boundary that reaches the budget.
+    assert capped.total_evaluations >= 20
+    assert capped.total_evaluations < uncapped.total_evaluations
+    assert len(capped.generation_best_makespans) < 51
+
+
 def test_run_evolution_uses_configured_strategies() -> None:
     problem_instance = _create_independent_instance()
     strategy_calls = {

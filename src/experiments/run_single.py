@@ -27,11 +27,23 @@ from src.solvers.evolutionary.algorithm import run_evolution
 from src.solvers.evolutionary.config import EvolutionConfig, EvolutionStrategies
 from src.solvers.evolutionary.crossovers import ox_crossover, pmx_crossover
 from src.solvers.evolutionary.local_search import cpm_local_search
-from src.solvers.evolutionary.strategies import swap_mutation, tournament_selection
+from src.solvers.evolutionary.strategies import swap_mutation
 
 LOCAL_SEARCH_ATTEMPTS = 20
+DEFAULT_TOURNAMENT_SIZE = 3
 SCHEMA_VERSION = 2
 _CROSSOVERS = {"ox": ox_crossover, "pmx": pmx_crossover}
+
+# Maps tuned-parameter JSON keys (as written by ``src.experiments.tune``) onto the
+# ``run_single`` argparse attributes they override, so a tuned ``best_params.json``
+# can be applied with ``--params-json`` without bespoke parsing here.
+_PARAMS_JSON_OVERRIDES = {
+    "population_size": "population",
+    "crossover_probability": "crossover_prob",
+    "mutation_probability": "mutation_prob",
+    "tournament_size": "tournament_size",
+    "cpm_max_attempts": "local_search_attempts",
+}
 
 
 @dataclass
@@ -47,6 +59,7 @@ class _CellRun:
 
     run_rows: list[dict] = field(default_factory=list)
     convergence_rows: list[dict] = field(default_factory=list)
+    convergence_eval_rows: list[dict] = field(default_factory=list)
     per_seed_wall_seconds: list[float] = field(default_factory=list)
     per_seed_cpu_seconds: list[float] = field(default_factory=list)
     started_utc: str = ""
@@ -71,6 +84,19 @@ DEFAULT_CROSSOVER_PROB = 0.8
 DEFAULT_MUTATION_PROB = 0.3
 DEFAULT_SEEDS = 15
 
+# Equal objective-evaluation budget (number of schedule decodes a pure EA spends
+# at the default budget: the initial population plus one offspring evaluation per
+# generation). ``--equal-budget`` compares every configuration at this SAME total
+# number of objective evaluations rather than the same number of generations, so
+# the memetic configs - which decode ~20-40x more per generation inside CPM local
+# search - no longer get a hidden budget advantage. Derived from the canonical
+# defaults (NOT --population), so the budget is identical across configs even when
+# a tuned config uses a different population size.
+EQUAL_BUDGET_EVALS = DEFAULT_POPULATION * (DEFAULT_GENERATIONS + 1)
+# With the budget as the binding stop, generations must not cut a run short, so
+# they are raised to a cap far above what any config reaches within the budget.
+EQUAL_BUDGET_GENERATION_CAP = 100_000
+
 # Tiny budget for `--quick` smoke tests only (NOT a tuned hyperparameter claim).
 QUICK_POPULATION = 20
 QUICK_GENERATIONS = 8
@@ -83,21 +109,35 @@ RUN_FIELDS = [
     "use_cpm",
     "seed",
     "best_makespan",
+    "evaluations",
     "processors",
     "nodes",
     "edges",
     "density",
 ]
 CONVERGENCE_FIELDS = ["instance", "config", "seed", "generation", "best_makespan"]
+CONVERGENCE_EVAL_FIELDS = [
+    "instance",
+    "config",
+    "seed",
+    "evaluations",
+    "best_makespan",
+]
 
 
-def build_strategies(crossover_name: str, use_cpm: bool) -> EvolutionStrategies:
+def build_strategies(
+    crossover_name: str,
+    use_cpm: bool,
+    local_search_attempts: int = LOCAL_SEARCH_ATTEMPTS,
+) -> EvolutionStrategies:
     """Builds the strategy bundle for one configuration."""
     local_search = None
     if use_cpm:
-        local_search = partial(cpm_local_search, max_attempts=LOCAL_SEARCH_ATTEMPTS)
+        local_search = partial(cpm_local_search, max_attempts=local_search_attempts)
+    # selection_strategy is left unset so the algorithm builds tournament
+    # selection from ``EvolutionConfig.tournament_size`` - that is what lets
+    # ``--tournament-size`` (and tuned params) actually take effect.
     return EvolutionStrategies(
-        selection_strategy=tournament_selection,
         mutation_strategy=swap_mutation,
         crossover_strategy=_CROSSOVERS[crossover_name],
         local_search_strategy=local_search,
@@ -110,7 +150,10 @@ def main(argv: list[str] | None = None) -> None:
     _resolve_defaults(args)
     entry = get_instance(args.instance)
     campaign = layout.resolve_campaign_dir(args.campaign, args.name)
-    cell = layout.cell_dir(campaign, args.instance, args.label)
+    if args.sub_cell:
+        cell = layout.subcell_dir(campaign, args.instance, args.label, args.seed_start)
+    else:
+        cell = layout.cell_dir(campaign, args.instance, args.label)
 
     cell_run = _execute(entry, args)
 
@@ -120,12 +163,13 @@ def main(argv: list[str] | None = None) -> None:
         cell_run.run_rows,
         cell_run.convergence_rows,
         _timing_payload(entry, args, cell_run),
+        cell_run.convergence_eval_rows,
     )
     print(f"[{entry.name}__{args.label}] {args.seeds} seeds -> {cell}")
 
 
 def _resolve_defaults(args: argparse.Namespace) -> None:
-    """Fills population/generations/seeds/label from the global defaults."""
+    """Fills population/generations/seeds/label and budget from the defaults."""
     if args.population is None:
         args.population = QUICK_POPULATION if args.quick else DEFAULT_POPULATION
     if args.generations is None:
@@ -134,6 +178,37 @@ def _resolve_defaults(args: argparse.Namespace) -> None:
         args.seeds = QUICK_SEEDS if args.quick else DEFAULT_SEEDS
     if args.label is None:
         args.label = layout.cell_label(args.crossover, args.cpm)
+
+    if args.params_json is not None:
+        _apply_params_json(args)
+
+    if args.equal_budget:
+        if args.max_evaluations is None:
+            args.max_evaluations = (
+                QUICK_POPULATION * (QUICK_GENERATIONS + 1)
+                if args.quick
+                else EQUAL_BUDGET_EVALS
+            )
+        # Let the budget be the binding stop: raise the generation cap above what
+        # any configuration reaches within the budget so it never clips a run.
+        args.generations = EQUAL_BUDGET_GENERATION_CAP
+
+
+def _apply_params_json(args: argparse.Namespace) -> None:
+    """Overrides EA hyperparameters from a tuned ``best_params.json`` file.
+
+    The file is the artifact written by :mod:`src.experiments.tune`; only the keys
+    in :data:`_PARAMS_JSON_OVERRIDES` are applied, so a study JSON carrying extra
+    bookkeeping fields is safe to pass.
+
+    Args:
+        args: Parsed arguments to mutate in place.
+    """
+    params = layout.read_json(Path(args.params_json))
+    tuned = params.get("params", params)
+    for json_key, arg_name in _PARAMS_JSON_OVERRIDES.items():
+        if json_key in tuned:
+            setattr(args, arg_name, tuned[json_key])
 
 
 def _execute(
@@ -146,12 +221,16 @@ def _execute(
     (``process_time``) so the saved timing stays meaningful even when cells run
     concurrently; only the EA call itself is timed, not I/O or setup.
     """
-    strategies = build_strategies(args.crossover, args.cpm)
+    strategies = build_strategies(
+        args.crossover, args.cpm, args.local_search_attempts
+    )
     base_config = EvolutionConfig(
         population_size=args.population,
         generations=args.generations,
         crossover_probability=args.crossover_prob,
         mutation_probability=args.mutation_prob,
+        tournament_size=args.tournament_size,
+        max_evaluations=args.max_evaluations,
     )
 
     cell_run = _CellRun(started_utc=datetime.now(timezone.utc).isoformat())
@@ -168,9 +247,16 @@ def _execute(
             round(time.perf_counter() - wall_start, 4)
         )
         cell_run.per_seed_cpu_seconds.append(round(time.process_time() - cpu_start, 4))
-        cell_run.run_rows.append(_run_row(entry, args, seed, result.best_makespan))
+        cell_run.run_rows.append(
+            _run_row(entry, args, seed, result.best_makespan, result.total_evaluations)
+        )
         cell_run.convergence_rows.extend(
             _convergence_rows(entry, args, seed, result.generation_best_makespans)
+        )
+        cell_run.convergence_eval_rows.extend(
+            _convergence_eval_rows(
+                entry, args, seed, result.evaluation_best_makespans
+            )
         )
 
     return cell_run
@@ -181,6 +267,7 @@ def _run_row(
     args: argparse.Namespace,
     seed: int,
     best_makespan: int,
+    evaluations: int,
 ) -> dict:
     """Builds one per-seed run row."""
     return {
@@ -190,11 +277,31 @@ def _run_row(
         "use_cpm": args.cpm,
         "seed": seed,
         "best_makespan": best_makespan,
+        "evaluations": evaluations,
         "processors": entry.problem_instance.number_of_groups,
         "nodes": entry.metadata.nodes,
         "edges": entry.metadata.edges,
         "density": round(entry.metadata.density, 4),
     }
+
+
+def _convergence_eval_rows(
+    entry: InstanceEntry,
+    args: argparse.Namespace,
+    seed: int,
+    eval_curve: list[tuple[int, int]],
+) -> list[dict]:
+    """Builds the per-seed best-vs-evaluations rows for equal-budget plots."""
+    return [
+        {
+            "instance": entry.name,
+            "config": args.label,
+            "seed": seed,
+            "evaluations": evaluations,
+            "best_makespan": best,
+        }
+        for evaluations, best in eval_curve
+    ]
 
 
 def _convergence_rows(
@@ -228,6 +335,11 @@ def _config_payload(entry: InstanceEntry, args: argparse.Namespace) -> dict:
         "generations": args.generations,
         "crossover_prob": args.crossover_prob,
         "mutation_prob": args.mutation_prob,
+        "tournament_size": args.tournament_size,
+        "local_search_attempts": args.local_search_attempts,
+        "max_evaluations": args.max_evaluations,
+        "equal_budget": args.equal_budget,
+        "params_json": args.params_json,
         "seed_start": args.seed_start,
         "seeds": args.seeds,
         "processors": entry.problem_instance.number_of_groups,
@@ -270,12 +382,18 @@ def write_cell(
     run_rows: list[dict],
     convergence_rows: list[dict],
     timing_payload: dict,
+    convergence_eval_rows: list[dict] | None = None,
 ) -> None:
-    """Writes the four artifacts of one result cell, overwriting any prior cell."""
+    """Writes the artifacts of one result cell, overwriting any prior cell."""
     cell.mkdir(parents=True, exist_ok=True)
     layout.write_json(cell / "config.json", config_payload)
     layout.write_csv(cell / "runs.csv", RUN_FIELDS, run_rows)
     layout.write_csv(cell / "convergence.csv", CONVERGENCE_FIELDS, convergence_rows)
+    layout.write_csv(
+        cell / "convergence_evals.csv",
+        CONVERGENCE_EVAL_FIELDS,
+        convergence_eval_rows or [],
+    )
     layout.write_json(cell / "timing.json", timing_payload)
 
 
@@ -322,6 +440,37 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         help="Mutation probability.",
     )
     parser.add_argument(
+        "--tournament-size",
+        type=int,
+        default=DEFAULT_TOURNAMENT_SIZE,
+        help="Tournament size for parent selection.",
+    )
+    parser.add_argument(
+        "--local-search-attempts",
+        type=int,
+        default=LOCAL_SEARCH_ATTEMPTS,
+        help="CPM local-search probes per individual (memetic configs only).",
+    )
+    parser.add_argument(
+        "--max-evaluations",
+        type=int,
+        default=None,
+        help="Objective-evaluation budget; stops at the generation boundary "
+        "reaching it. See also --equal-budget.",
+    )
+    parser.add_argument(
+        "--equal-budget",
+        action="store_true",
+        help="Compare configs at the pure-EA objective-evaluation budget "
+        f"({EQUAL_BUDGET_EVALS} decodes) instead of equal generations.",
+    )
+    parser.add_argument(
+        "--params-json",
+        default=None,
+        help="Path to a tuned best_params.json whose values override the "
+        "population/probabilities/tournament/CPM-attempts.",
+    )
+    parser.add_argument(
         "--seeds",
         type=int,
         default=None,
@@ -332,6 +481,12 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         type=int,
         default=0,
         help="First seed value (for disjoint, resumable ranges).",
+    )
+    parser.add_argument(
+        "--sub-cell",
+        action="store_true",
+        help="Write into <cell>/seeds/<seed-start>/ for per-seed parallel "
+        "campaigns (reassembled by run_campaign's merge step).",
     )
     parser.add_argument(
         "--quick",

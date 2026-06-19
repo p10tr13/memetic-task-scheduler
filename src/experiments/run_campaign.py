@@ -13,17 +13,18 @@ missing cells; nothing shares a single clobberable file.
 """
 
 import argparse
+import csv
 import os
 import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 
-from src.experiments import layout
+from src.experiments import layout, run_single
 from src.experiments.instances import list_instances
 
 REPOSITORY_ROOT = layout.REPOSITORY_ROOT
-CAMPAIGN_SCHEMA_VERSION = 1
+CAMPAIGN_SCHEMA_VERSION = 2
 
 # The whole campaign: these four methods x every instance. Each runs at the
 # global default budget (pure EA = no CPM local search; memetic = CPM on).
@@ -34,15 +35,32 @@ METHODS = (
     {"crossover": "pmx", "cpm": True},  # memetic (CPM), PMX crossover
 )
 
+# run_single flags forwarded verbatim from the campaign so a budget/tuning sweep
+# can be configured once at the campaign level. ``store_true`` flags are emitted
+# only when set; valued flags only when not None (None => run_single's default).
+_PASSTHROUGH_STORE_TRUE = ("equal_budget",)
+_PASSTHROUGH_VALUED = {
+    "population": "--population",
+    "generations": "--generations",
+    "crossover_prob": "--crossover-prob",
+    "mutation_prob": "--mutation-prob",
+    "tournament_size": "--tournament-size",
+    "local_search_attempts": "--local-search-attempts",
+    "max_evaluations": "--max-evaluations",
+    "params_json": "--params-json",
+}
+
 
 def main(argv: list[str] | None = None) -> None:
-    """Runs the campaign by subprocess-driving the single runner per cell."""
+    """Runs the campaign by subprocess-driving the single runner per work unit."""
     args = _parse_arguments(argv)
     campaign = layout.resolve_campaign_dir(args.campaign, args.name)
     instances = args.instances or list_instances(quick=args.quick)
-    cells = [(instance, method) for instance in instances for method in METHODS]
+    seeds = _campaign_seeds(args)
+    unit = f"{len(seeds)} seeds" if args.per_seed else "method"
     print(
-        f"Campaign: {len(instances)} instances x {len(METHODS)} methods -> {campaign}"
+        f"Campaign: {len(instances)} instances x {len(METHODS)} methods "
+        f"({unit} per cell) -> {campaign}"
     )
 
     started = datetime.now(timezone.utc)
@@ -52,14 +70,13 @@ def main(argv: list[str] | None = None) -> None:
         _baselines(args, campaign, instances)
     baselines_seconds = round(time.perf_counter() - wall_start, 4)
 
-    pending = [
-        (instance, method)
-        for instance, method in cells
-        if not (args.skip_existing_cells and _cell_exists(campaign, instance, method))
-    ]
+    jobs = _build_jobs(args, campaign, instances, seeds)
     cells_start = time.perf_counter()
-    failures = _run_cells(args, campaign, pending)
+    failures = _run_jobs(args, jobs)
     cells_seconds = round(time.perf_counter() - cells_start, 4)
+
+    if args.per_seed:
+        _merge_subcells(campaign, instances, seeds)
 
     _write_campaign_timing(
         campaign,
@@ -68,7 +85,8 @@ def main(argv: list[str] | None = None) -> None:
             "schema_version": CAMPAIGN_SCHEMA_VERSION,
             "started_utc": started.isoformat(),
             "jobs": args.jobs,
-            "cells_run": len(pending),
+            "per_seed": args.per_seed,
+            "cells_run": len(jobs),
             "wall_seconds": round(time.perf_counter() - wall_start, 4),
             "baselines_wall_seconds": baselines_seconds,
             "cells_wall_seconds": cells_seconds,
@@ -77,34 +95,67 @@ def main(argv: list[str] | None = None) -> None:
     _report(campaign, failures)
 
 
-def _run_cells(
+def _campaign_seeds(args: argparse.Namespace) -> list[int]:
+    """Returns the seed values the campaign covers."""
+    count = args.seeds
+    if count is None:
+        count = run_single.QUICK_SEEDS if args.quick else run_single.DEFAULT_SEEDS
+    return list(range(args.seed_start, args.seed_start + count))
+
+
+def _build_jobs(
     args: argparse.Namespace,
     campaign,
-    cells: list[tuple[str, dict]],
-) -> list[str]:
-    """Runs the (instance, method) cells, up to ``--jobs`` in parallel.
+    instances: list[str],
+    seeds: list[int],
+) -> list[tuple[list[str], str]]:
+    """Builds the (command, label) work units, skipping any already on disk.
 
-    Cells are fully independent isolated subprocesses, so running several at once
-    only changes wall-clock, never results. Failure semantics match the
-    sequential runner: without ``--continue-on-error`` the first failure stops
-    launching new cells (already-launched ones are left to finish).
+    In ``--per-seed`` mode each unit is one (instance, method, seed) sub-cell, so
+    the campaign parallelises 1200-way (20x4x15) instead of 80-way; otherwise each
+    unit is one (instance, method) cell that runs all seeds in-process.
+    """
+    jobs: list[tuple[list[str], str]] = []
+    for instance in instances:
+        for method in METHODS:
+            label = layout.cell_label(method["crossover"], method["cpm"])
+            seed_chunks = seeds if args.per_seed else [None]
+            for seed in seed_chunks:
+                if args.skip_existing_cells and _unit_exists(
+                    campaign, instance, label, seed
+                ):
+                    continue
+                command = _cell_command(args, campaign, instance, method, seed)
+                tag = f"{instance}/{label}"
+                jobs.append((command, tag if seed is None else f"{tag}#{seed}"))
+    return jobs
+
+
+def _run_jobs(
+    args: argparse.Namespace,
+    jobs: list[tuple[list[str], str]],
+) -> list[str]:
+    """Runs the (command, label) work units, up to ``--jobs`` in parallel.
+
+    Units are fully independent isolated subprocesses, so running several at once
+    only changes wall-clock, never results. Failure semantics: without
+    ``--continue-on-error`` the first failure stops launching new units
+    (already-launched ones are left to finish).
     """
     failures: list[str] = []
     running: list[tuple[subprocess.Popen, str]] = []
     stop = False
     index = 0
 
-    while (index < len(cells) and not stop) or running:
-        while not stop and index < len(cells) and len(running) < args.jobs:
-            instance, method = cells[index]
+    while (index < len(jobs) and not stop) or running:
+        while not stop and index < len(jobs) and len(running) < args.jobs:
+            command, label = jobs[index]
             index += 1
-            command = _cell_command(args, campaign, instance, method)
-            label = layout.cell_label(method["crossover"], method["cpm"])
             # Process is pool-managed and outlives this scope; reaped in _wait_any.
             process = subprocess.Popen(  # pylint: disable=consider-using-with
                 command, cwd=str(REPOSITORY_ROOT)
             )
-            running.append((process, f"{instance}/{label}"))
+            running.append((process, label))
 
         finished = _wait_any(running)
         for process, cell_label in finished:
@@ -133,9 +184,10 @@ def _cell_command(
     campaign,
     instance: str,
     method: dict,
+    seed: int | None,
 ) -> list[str]:
-    """Builds the run_single subprocess command for one cell."""
-    flags = _cell_flags(campaign, instance, method, args.quick)
+    """Builds the run_single subprocess command for one work unit."""
+    flags = _cell_flags(args, campaign, instance, method, seed)
     return [args.python, "-m", "src.experiments.run_single", *flags]
 
 
@@ -166,8 +218,14 @@ def _baselines(args: argparse.Namespace, campaign, instances: list[str]) -> None
     )
 
 
-def _cell_flags(campaign, instance: str, method: dict, quick: bool) -> list[str]:
-    """Builds the run_single flags for one (instance, method) cell."""
+def _cell_flags(
+    args: argparse.Namespace,
+    campaign,
+    instance: str,
+    method: dict,
+    seed: int | None,
+) -> list[str]:
+    """Builds the run_single flags for one work unit, forwarding budget/tune flags."""
     flags = [
         "--instance",
         instance,
@@ -177,15 +235,103 @@ def _cell_flags(campaign, instance: str, method: dict, quick: bool) -> list[str]
         "--campaign",
         str(campaign),
     ]
-    if quick:
+    if args.quick:
         flags.append("--quick")
+    if seed is not None:
+        flags += ["--sub-cell", "--seed-start", str(seed), "--seeds", "1"]
+    elif args.seeds is not None:
+        flags += ["--seeds", str(args.seeds), "--seed-start", str(args.seed_start)]
+
+    for attr in _PASSTHROUGH_STORE_TRUE:
+        if getattr(args, attr):
+            flags.append(f"--{attr.replace('_', '-')}")
+    for attr, flag in _PASSTHROUGH_VALUED.items():
+        value = getattr(args, attr)
+        if value is not None:
+            flags += [flag, str(value)]
     return flags
 
 
-def _cell_exists(campaign, instance: str, method: dict) -> bool:
-    """Returns whether a cell already has a written config.json."""
-    label = layout.cell_label(method["crossover"], method["cpm"])
-    return (layout.cell_dir(campaign, instance, label) / "config.json").exists()
+def _unit_exists(campaign, instance: str, label: str, seed: int | None) -> bool:
+    """Returns whether a work unit's cell (or sub-cell) is already on disk."""
+    if seed is None:
+        cell = layout.cell_dir(campaign, instance, label)
+    else:
+        cell = layout.subcell_dir(campaign, instance, label, seed)
+    return (cell / "config.json").exists()
+
+
+def _merge_subcells(campaign, instances: list[str], seeds: list[int]) -> None:
+    """Reassembles per-seed sub-cells into the canonical (instance, method) cell.
+
+    Concatenates each sub-cell's per-seed rows (in seed order) into the cell-level
+    runs.csv / convergence.csv / convergence_evals.csv that analyze/plots/figures
+    read, and sums the per-seed timings, so downstream analysis is identical to a
+    non-per-seed campaign.
+    """
+    for instance in instances:
+        for method in METHODS:
+            label = layout.cell_label(method["crossover"], method["cpm"])
+            present = [
+                seed
+                for seed in seeds
+                if (
+                    layout.subcell_dir(campaign, instance, label, seed)
+                    / "runs.csv"
+                ).exists()
+            ]
+            if not present:
+                continue
+            _merge_one_cell(campaign, instance, label, present)
+
+
+def _merge_one_cell(campaign, instance: str, label: str, seeds: list[int]) -> None:
+    """Merges the present sub-cells of one (instance, method) into its cell."""
+    cell = layout.cell_dir(campaign, instance, label)
+    sub_dirs = [layout.subcell_dir(campaign, instance, label, s) for s in seeds]
+
+    for filename, fields in (
+        ("runs.csv", run_single.RUN_FIELDS),
+        ("convergence.csv", run_single.CONVERGENCE_FIELDS),
+        ("convergence_evals.csv", run_single.CONVERGENCE_EVAL_FIELDS),
+    ):
+        rows = [row for sub in sub_dirs for row in _read_csv(sub / filename)]
+        layout.write_csv(cell / filename, fields, rows)
+
+    config = layout.read_json(sub_dirs[0] / "config.json")
+    config["seed_start"] = min(seeds)
+    config["seeds"] = len(seeds)
+    layout.write_json(cell / "config.json", config)
+    layout.write_json(
+        cell / "timing.json", _merge_timing(instance, label, sub_dirs)
+    )
+
+
+def _read_csv(path) -> list[dict]:
+    """Reads a CSV file into a list of dict rows (empty if missing)."""
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def _merge_timing(instance: str, label: str, sub_dirs: list) -> dict:
+    """Sums the per-seed sub-cell timings into one cell timing payload."""
+    timings = [layout.read_json(sub / "timing.json") for sub in sub_dirs]
+    wall = [s for t in timings for s in t.get("per_seed_seconds", [])]
+    cpu = [s for t in timings for s in t.get("per_seed_cpu_seconds", [])]
+    return {
+        "schema_version": run_single.SCHEMA_VERSION,
+        "instance": instance,
+        "label": label,
+        "per_seed_seconds": wall,
+        "total_seconds": round(sum(wall), 4),
+        "mean_seconds": round(sum(wall) / len(wall), 4) if wall else 0.0,
+        "per_seed_cpu_seconds": cpu,
+        "total_cpu_seconds": round(sum(cpu), 4),
+        "mean_cpu_seconds": round(sum(cpu) / len(cpu), 4) if cpu else 0.0,
+        "merged_from_subcells": len(sub_dirs),
+    }
 
 
 def _write_campaign_timing(campaign, started: datetime, timing: dict) -> None:
@@ -254,6 +400,54 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         "--no-baselines",
         action="store_true",
         help="Do not compute baselines (EA cells only).",
+    )
+    parser.add_argument(
+        "--per-seed",
+        action="store_true",
+        help="Parallelise at (instance, method, seed) granularity via per-seed "
+        "sub-cells, merged afterwards. Saturates many-core machines.",
+    )
+    parser.add_argument(
+        "--seeds",
+        type=int,
+        default=None,
+        help="Seeds per cell (default: run_single's global default).",
+    )
+    parser.add_argument(
+        "--seed-start",
+        type=int,
+        default=0,
+        help="First seed value.",
+    )
+    parser.add_argument(
+        "--equal-budget",
+        action="store_true",
+        help="Forward --equal-budget to every run_single (equal eval budget).",
+    )
+    parser.add_argument(
+        "--max-evaluations",
+        type=int,
+        default=None,
+        help="Forward an explicit objective-evaluation budget to every run_single.",
+    )
+    parser.add_argument(
+        "--params-json",
+        default=None,
+        help="Forward a tuned best_params.json to every run_single.",
+    )
+    parser.add_argument("--population", type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--generations", type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--crossover-prob", type=float, default=None, help=argparse.SUPPRESS
+    )
+    parser.add_argument(
+        "--mutation-prob", type=float, default=None, help=argparse.SUPPRESS
+    )
+    parser.add_argument(
+        "--tournament-size", type=int, default=None, help=argparse.SUPPRESS
+    )
+    parser.add_argument(
+        "--local-search-attempts", type=int, default=None, help=argparse.SUPPRESS
     )
     return parser.parse_args(argv)
 

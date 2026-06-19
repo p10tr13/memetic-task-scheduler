@@ -1,10 +1,53 @@
 """List scheduling decoder for task permutations."""
 
+import contextvars
 import heapq
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 from src.core.models import ProblemInstance, predecessors_map
+
+# Objective-function (schedule decode) call counter. ``compute_schedule`` is the
+# single chokepoint every makespan evaluation flows through - the EA fitness
+# evaluation, the heuristics, and every CPM local-search probe (which calls
+# ``calculate_makespan`` and ``identify_critical_tasks``, both of which decode).
+# Counting here is therefore the only place that captures *all* objective
+# evaluations, including the ones the DEAP toolbox never sees. A ContextVar
+# (not a plain global) keeps the count correct under thread pools and Optuna
+# multi-worker runs. It defaults to ``None`` (inactive), so the increment is a
+# single cheap comparison and existing callers/tests are completely unchanged.
+_EVAL_COUNT: contextvars.ContextVar[int | None] = contextvars.ContextVar(
+    "decoder_eval_count", default=None
+)
+
+
+def start_eval_counter() -> contextvars.Token:
+    """Activates (and zeroes) the objective-evaluation counter.
+
+    Returns:
+        A token to pass to :func:`reset_eval_counter` to restore the previous
+        counter state, so counters can be nested.
+    """
+    return _EVAL_COUNT.set(0)
+
+
+def get_eval_count() -> int:
+    """Returns the number of schedule decodes since the counter was started.
+
+    Returns:
+        The current count, or 0 if no counter is active.
+    """
+    count = _EVAL_COUNT.get()
+    return count if count is not None else 0
+
+
+def reset_eval_counter(token: contextvars.Token) -> None:
+    """Restores the counter state captured by :func:`start_eval_counter`.
+
+    Args:
+        token: Token returned by the matching :func:`start_eval_counter` call.
+    """
+    _EVAL_COUNT.reset(token)
 
 
 @dataclass(frozen=True)
@@ -70,6 +113,10 @@ def compute_schedule(
     Raises:
         ValueError: If the processor count, task times, or permutation is invalid.
     """
+    active_count = _EVAL_COUNT.get()
+    if active_count is not None:
+        _EVAL_COUNT.set(active_count + 1)
+
     processor_count = _validate_processor_count(problem_instance)
 
     if validate:

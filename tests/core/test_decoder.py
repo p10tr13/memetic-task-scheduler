@@ -4,7 +4,14 @@ import networkx as nx
 import numpy as np
 import pytest
 
-from src.core.decoder import calculate_makespan, compute_schedule
+from src.core.cpm_utils import identify_critical_tasks
+from src.core.decoder import (
+    calculate_makespan,
+    compute_schedule,
+    get_eval_count,
+    reset_eval_counter,
+    start_eval_counter,
+)
 from src.core.models import ProblemInstance
 
 
@@ -109,6 +116,56 @@ def test_compute_schedule_records_processor_reuse() -> None:
 
     assert schedule.makespan == 10
     assert schedule.machine_predecessors == {0: None, 1: None, 2: 0}
+
+
+def test_eval_counter_is_inactive_by_default() -> None:
+    problem_instance = _create_problem_instance(number_of_groups=2)
+
+    calculate_makespan([0, 1, 2, 3], problem_instance)
+
+    assert get_eval_count() == 0
+
+
+def test_eval_counter_counts_each_decode() -> None:
+    problem_instance = _create_problem_instance(number_of_groups=2)
+
+    token = start_eval_counter()
+    try:
+        calculate_makespan([0, 1, 2, 3], problem_instance)
+        compute_schedule([0, 1, 2, 3], problem_instance)
+        assert get_eval_count() == 2
+    finally:
+        reset_eval_counter(token)
+
+    assert get_eval_count() == 0
+
+
+def test_eval_counter_counts_critical_path_decodes() -> None:
+    problem_instance = _create_problem_instance(number_of_groups=2)
+
+    token = start_eval_counter()
+    try:
+        identify_critical_tasks([0, 1, 2, 3], problem_instance)
+        # ``identify_critical_tasks`` decodes the schedule once via
+        # ``compute_schedule``; that decode must be counted too.
+        assert get_eval_count() == 1
+    finally:
+        reset_eval_counter(token)
+
+
+def test_eval_counter_reset_restores_previous_state() -> None:
+    problem_instance = _create_problem_instance(number_of_groups=2)
+
+    outer = start_eval_counter()
+    calculate_makespan([0, 1, 2, 3], problem_instance)
+
+    inner = start_eval_counter()
+    calculate_makespan([0, 1, 2, 3], problem_instance)
+    assert get_eval_count() == 1
+    reset_eval_counter(inner)
+
+    assert get_eval_count() == 1
+    reset_eval_counter(outer)
 
 
 def _create_problem_instance(number_of_groups: int | None) -> ProblemInstance:

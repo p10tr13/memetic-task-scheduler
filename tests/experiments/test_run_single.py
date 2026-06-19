@@ -58,6 +58,69 @@ def test_build_strategies_pure_ea_has_no_local_search() -> None:
     assert strategies.crossover_strategy is pmx_crossover
 
 
+def test_build_strategies_threads_local_search_attempts() -> None:
+    strategies = run_single.build_strategies("ox", True, local_search_attempts=7)
+
+    assert strategies.local_search_strategy.keywords["max_attempts"] == 7
+
+
+def test_resolve_defaults_equal_budget_sets_evaluation_budget() -> None:
+    args = run_single._parse_arguments(
+        ["--instance", "x", "--crossover", "ox", "--cpm", "--equal-budget"]
+    )
+
+    run_single._resolve_defaults(args)
+
+    assert args.max_evaluations == run_single.EQUAL_BUDGET_EVALS
+    assert args.generations == run_single.EQUAL_BUDGET_GENERATION_CAP
+
+
+def test_resolve_defaults_applies_params_json(tmp_path) -> None:
+    params_path = tmp_path / "best_params.json"
+    layout.write_json(
+        params_path,
+        {
+            "params": {
+                "population_size": 33,
+                "crossover_probability": 0.71,
+                "mutation_probability": 0.22,
+                "tournament_size": 5,
+                "cpm_max_attempts": 42,
+            }
+        },
+    )
+    args = run_single._parse_arguments(
+        ["--instance", "x", "--crossover", "ox", "--params-json", str(params_path)]
+    )
+
+    run_single._resolve_defaults(args)
+
+    assert args.population == 33
+    assert args.crossover_prob == 0.71
+    assert args.mutation_prob == 0.22
+    assert args.tournament_size == 5
+    assert args.local_search_attempts == 42
+
+
+def test_write_cell_writes_evaluation_convergence(tmp_path) -> None:
+    cell = tmp_path / "runs" / "syn__ox"
+    eval_rows = [
+        {
+            "instance": "syn",
+            "config": "ox",
+            "seed": 0,
+            "evaluations": 50,
+            "best_makespan": 12,
+        }
+    ]
+
+    run_single.write_cell(cell, {"label": "ox"}, [], [], {"total_seconds": 0.0}, eval_rows)
+
+    with (cell / "convergence_evals.csv").open(encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    assert rows[0]["evaluations"] == "50"
+
+
 def test_resolve_defaults_uses_global_constants() -> None:
     args = run_single._parse_arguments(["--instance", "x", "--crossover", "ox"])
 

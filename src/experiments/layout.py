@@ -40,6 +40,15 @@ def cell_dir(campaign: Path, instance: str, label: str) -> Path:
     return runs_dir(campaign) / cell_dirname(instance, label)
 
 
+def subcell_dir(campaign: Path, instance: str, label: str, seed: int) -> Path:
+    """Returns the per-seed sub-cell directory ``<cell>/seeds/<seed>``.
+
+    Per-seed sub-cells let a campaign parallelise at the (instance, method, seed)
+    granularity; :func:`merge_subcells` reassembles them into the canonical cell.
+    """
+    return cell_dir(campaign, instance, label) / "seeds" / str(seed)
+
+
 def baselines_dir(campaign: Path) -> Path:
     """Returns the ``baselines/`` subdirectory of a campaign."""
     return campaign / "baselines"
