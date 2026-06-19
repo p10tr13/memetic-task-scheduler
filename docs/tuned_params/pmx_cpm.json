@@ -1,0 +1,40 @@
+{
+  "best_value": 0.019107683680548004,
+  "completed_trials": 160,
+  "crossover": "pmx",
+  "max_evaluations": 5050,
+  "optuna_version": "4.9.0",
+  "params": {
+    "cpm_max_attempts": 10,
+    "crossover_probability": 0.9182165012731225,
+    "mutation_probability": 0.13329518214246272,
+    "population_size": 20,
+    "tournament_size": 3
+  },
+  "tune_instances": [
+    "syn_t15_p010",
+    "syn_t30_p030",
+    "syn_t40_p035",
+    "syn_t60_p015",
+    "rand0000_t50_p008",
+    "rand0173_t100_p039"
+  ],
+  "tune_seeds": 3,
+  "use_cpm": true,
+  "validation_instances": [
+    "syn_t22_p018",
+    "syn_t40_p006",
+    "syn_t60_p005",
+    "syn_t100_p004",
+    "syn_t100_p012",
+    "syn_t150_p004",
+    "rand0093_t50_p078",
+    "rand0063_t100_p002",
+    "rand0071_t300_p001",
+    "rand0000_t300_p016",
+    "rand0014_t500_p020",
+    "robot_t88_p003",
+    "sparse_t96_p001",
+    "fpppp_t334_p002"
+  ]
+}

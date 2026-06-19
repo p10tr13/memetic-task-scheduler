@@ -11,10 +11,10 @@
     legend cell align=left,
 ]
 % power-law fits t = a |T|^b (linear regression in log-log space)
-\addplot[colOX, thick, domain=15:520, samples=40, forget plot] {0.00128872*x^1.5266};
-\addplot[colPMX, thick, domain=15:520, samples=40, forget plot] {0.00178166*x^1.4213};
-\addplot[colOXC, thick, domain=15:520, samples=40, forget plot] {0.0962152*x^1.3598};
-\addplot[colPMXC, thick, domain=15:520, samples=40, forget plot] {0.117832*x^1.3189};
+\addplot[colOX, thick, domain=15:520, samples=40, forget plot] {0.013802*x^1.2485};
+\addplot[colPMX, thick, domain=15:520, samples=40, forget plot] {0.0186439*x^1.1546};
+\addplot[colOXC, thick, domain=15:520, samples=40, forget plot] {0.00868667*x^1.3120};
+\addplot[colPMXC, thick, domain=15:520, samples=40, forget plot] {0.0090703*x^1.2969};
 % measured points
 \addplot[only marks, mark=*, colOX, mark size=1.7pt] table[x=tasks,y=ox] {figures/data/cpu_time.dat};
 \addplot[only marks, mark=square*, colPMX, mark size=1.6pt] table[x=tasks,y=pmx] {figures/data/cpu_time.dat};
