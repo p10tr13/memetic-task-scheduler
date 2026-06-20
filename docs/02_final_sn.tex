@@ -48,6 +48,22 @@
 
 \affil[1]{\orgname{Politechnika Warszawska}, \orgaddress{\city{Warszawa}, \country{Polska}}}
 
+\abstract{Rozważamy harmonogramowanie zadań z~ograniczeniem pierwszeństwa na~$M$
+nierozróżnialnych procesorach, minimalizujące makespan~($C_{max}$) -- problem
+NP-trudny. Proponujemy algorytm memetyczny: algorytm ewolucyjny na~permutacjach
+priorytetów z~dekoderem listowym, wsparty lokalnym przeszukiwaniem opartym
+o~ścieżkę krytyczną liczoną na~zdekodowanym harmonogramie. Cztery konfiguracje
+(krzyżowanie OX lub~PMX, z~modułem ścieżki krytycznej i~bez) porównujemy na~20
+instancjach przy \emph{równym budżecie ewaluacji funkcji celu}. Przy tak uczciwym
+porównaniu najlepszy jest czysty operator PMX (najlepszy lub remisujący na~19
+z~20 instancji); lokalne przeszukiwanie pomaga słabszemu OX, ale szkodzi PMX,
+a~jego przewaga przy równej liczbie pokoleń okazuje się skutkiem większego nakładu
+obliczeniowego, nie lepszej metody. PMX dominuje nad~OX niezależnie od~budżetu,
+a~strojenie hiperparametrów (Optuna) poprawia wyniki, lecz nie zmienia tego rankingu.}
+
+\keywords{harmonogramowanie zadań, algorytm memetyczny, ścieżka krytyczna,
+algorytm ewolucyjny, makespan}
+
 \maketitle
 
 \sloppy
@@ -82,7 +98,7 @@ zadania wykonywane kolejno na tym samym procesorze łączy \emph{krawędź maszy
 -- nie jest to więz pierwszeństwa, lecz ograniczenie zasobowe wynikające z~tego,
 że procesor jest zajęty. Ciąg takich krawędzi tworzy \emph{ścieżkę maszynową}.
 O~wartości $C_{max}$ może decydować zarówno ścieżka pierwszeństwa, jak i~ścieżka
-maszynowa; rozróżnienie to jest kluczowe dla zaproponowanej metody lokalnej.
+maszynowa; na~tym rozróżnieniu opiera się nasza metoda lokalna.
 Przykład na rysunku~\ref{fig:przyklad} pokazuje graf zależności i~jego harmonogram.
 
 \begin{figure}[H]
@@ -233,20 +249,28 @@ Eksperymenty oceniają jakość rozwiązań algorytmu oraz weryfikują dwie hipo
     \item[(H1)] lokalna optymalizacja CPM istotnie obniża medianę $C_{max}$ względem czystego AE \emph{przy równym budżecie ewaluacji funkcji celu};
     \item[(H2)] krzyżowanie OX istotnie dominuje nad PMX na grafach rzadkich ($|E|/|T|^2 < 0{,}1$).
 \end{itemize}
+Hipotezy odzwierciedlają oczekiwania z~literatury: lokalne przeszukiwanie ścieżki
+krytycznej powinno usuwać wąskie gardła harmonogramu (H1), a~zachowujące względną
+kolejność krzyżowanie OX powinno lepiej respektować silne więzy pierwszeństwa,
+liczniejsze właśnie na~grafach rzadkich (H2). Obie poddajemy weryfikacji empirycznej.
 
-\paragraph{Zestawy testowe.}
+\paragraph{Benchmarki.}
 Jako instancje posłużyły grafy ze zbioru \textit{Standard Task Graph Set}
-(Kasahara Lab)~\cite{tobita2002} oraz grafy generowane syntetycznie.
-Generator tworzy losowy DAG: $n$ zadań o~czasach z~rozkładu jednostajnego
+(Kasahara Lab)~\cite{tobita2002} oraz grafy generowane syntetycznie -- po~10
+z~każdego źródła, o~rozmiarach od~kilkunastu do~ponad 500 zadań. Generator
+syntetyczny tworzy losowy DAG: $n$ zadań o~czasach z~rozkładu jednostajnego
 $[1,10]$, krawędzie losowane spośród par $(i,j)$ z~$i<j$ (co gwarantuje
 acykliczność) w~liczbie zadanej gęstością $|E|/\binom{n}{2}$, a~węzły bez
 poprzedników/następników spinane są sztucznymi węzłami wejścia i~wyjścia
-o~czasie~$0$; ustalone ziarno czyni zbiór powtarzalnym. Dla małych instancji (do~$32$ węzłów
-łącznie ze sztucznymi węzłami wejścia/wyjścia) wyznaczono rozwiązanie optymalne
-solverem programowania całkowitoliczbowego mieszanego (MILP, \textit{ang.
-Mixed-Integer Linear Programming}; CBC poprzez PuLP~\cite{mitchell2011}), co
-pozwala raportować lukę optymalizacyjną. Dla pozostałych instancji odniesieniem
-jest dolne ograniczenie (LB, \textit{ang. lower bound})
+o~czasie~$0$; ustalone ziarno czyni zbiór powtarzalnym.
+
+\paragraph{Odniesienie.}
+Dla małych instancji (do~$32$ węzłów łącznie ze sztucznymi węzłami
+wejścia/wyjścia) wyznaczono rozwiązanie optymalne solverem programowania
+całkowitoliczbowego mieszanego (MILP, \textit{ang. Mixed-Integer Linear
+Programming}; CBC poprzez PuLP~\cite{mitchell2011}), co pozwala raportować lukę
+optymalizacyjną. Dla pozostałych instancji odniesieniem jest dolne ograniczenie
+(LB, \textit{ang. lower bound})
 $\mathrm{LB} = \max(\lceil \text{całkowita praca}/M \rceil,\ \text{długość ścieżki krytycznej})$.
 Luki dla różnych instancji nie są więc wprost porównywalne (raz względem optimum,
 raz względem ograniczenia o~zmiennej szczelności); używamy ich do porównań
@@ -259,12 +283,15 @@ przy równej liczbie \emph{pokoleń} dysponowałyby wielokrotnie większym nakł
 obliczeniowym. Aby porównanie było uczciwe~\cite{hooker1995}, wszystkie cztery
 konfiguracje prowadzimy do tego samego \emph{budżetu ewaluacji funkcji celu}
 $B = 5050$ dekodowań harmonogramu (tyle zużywa czysty AE przy populacji $50$
-i~$100$ pokoleniach: $50\times(100+1)$). Każdy przebieg zatrzymujemy na granicy
+i~$100$ pokoleniach: $50\times(100+1)$). Jako jednostkę budżetu liczymy każde
+wywołanie dekodera -- ewaluacje przystosowania, próby \textit{pull-left} oraz
+dekodowania w~analizie ścieżki krytycznej -- bo to dekodowanie ($O(|T|\log M)$)
+jest dominującym kosztem obu rodzin metod. Każdy przebieg zatrzymujemy na granicy
 pokolenia po~osiągnięciu~$B$, więc wariant memetyczny wykonuje mniej pokoleń, ale
-w~przybliżeniu tyle samo ewaluacji co~AE, a~różnice jakości nie wynikają już
+w~przybliżeniu tyle samo dekodowań co~AE, a~różnice jakości nie wynikają już
 z~większego nakładu. Ponieważ jedno pokolenie wariantu memetycznego to wiele
-ewaluacji, warianty te nieznacznie przekraczają budżet (średnio ok.~5650 wobec
-5070 ewaluacji czystego AE), dostają więc \emph{nieco więcej}, a~nie mniej
+dekodowań, warianty te nieznacznie przekraczają budżet (średnio $5650$--$5770$
+wobec $5070$ dla~czystego AE), dostają więc \emph{nieco więcej}, a~nie mniej
 nakładu; czyni to wniosek o~przewadze czystego AE konserwatywnym. Dla porównania
 alternatywny protokół z~równą liczbą pokoleń i~uzyskane w~nim wyniki zestawiamy
 w~dodatku~\ref{app:gen}.
@@ -383,7 +410,9 @@ przeciwnie: istotnie szkodzi na~9 instancjach, a~pomaga tylko raz (o~1 jednostk�
 liczby ewaluacji (rys.~\ref{fig:convevals}) pokazuje mechanizm: przy tym samym
 budżecie czysty \texttt{pmx} schodzi najniżej, bo przeznacza wszystkie ewaluacje
 na~eksplorację wielu pokoleń, podczas gdy \texttt{pmx\_cpm} zużywa budżet
-na~intensyfikację w~niewielu pokoleniach.
+na~intensyfikację w~niewielu pokoleniach. Krzywa \texttt{pmx} leży przy tym poniżej
+pozostałych na~całym zakresie budżetu, nie tylko w~punkcie $B$, więc wniosek nie
+zależy od~konkretnej wartości budżetu.
 
 \begin{table}[ht]
 \centering\scriptsize\setlength{\tabcolsep}{5pt}
@@ -493,7 +522,10 @@ Boxploty (rys.~\ref{fig:box}) potwierdzają, że \texttt{pmx} jest nie tylko
 najniższy, ale i~wąski. Rysunek~\ref{fig:agg} porządkuje konfiguracje średnią luką
 do~LB: w~każdym podziale (wszystkie/gęste/rzadkie) czysty \texttt{pmx} jest
 najlepszy ($3{,}5\%$ na~wszystkich instancjach wobec $5{,}1\%$ dla \texttt{pmx\_cpm},
-$6{,}2\%$ dla \texttt{ox\_cpm} i~$8{,}3\%$ dla \texttt{ox}).
+$6{,}2\%$ dla \texttt{ox\_cpm} i~$8{,}3\%$ dla \texttt{ox}). Podział na~gęste
+i~rzadkie jest niezrównoważony (tylko 4 grafy gęste), więc słupki dla~grafów
+gęstych traktujemy poglądowo; ranking konfiguracji jest jednak ten sam w~każdym
+podziale.
 
 \begin{figure}[H]
 \centering
@@ -549,7 +581,8 @@ luka do~LB na~\emph{zbiorze strojeniowym} 6 instancji (\texttt{syn\_t15},
 przy \emph{tym samym budżecie} $B=5050$, co reszta pracy -- strojenie jest więc tak
 samo budżetowo uczciwe. Aby uniknąć przeuczenia, strojone parametry porównujemy
 z~bazowymi wyłącznie na~14 pozostałych, \emph{niewidzianych} instancjach
-walidacyjnych; różnice testujemy sparowanym testem Wilcoxona (hipoteza H3).
+walidacyjnych, przy pełnych 15 ziarnach (jak w~głównej kampanii); różnice testujemy
+sparowanym testem Wilcoxona (hipoteza H3).
 
 \begin{table}[ht]
 \centering\scriptsize\setlength{\tabcolsep}{5pt}
@@ -594,9 +627,9 @@ konfiguracji pozostaje ten sam: także po~strojeniu najlepszy jest czysty PMX
 \label{sec:wnioski}
 % =====================================================================
 \begin{itemize}[itemsep=3pt, topsep=3pt]
-    \item Przy uczciwym budżecie najlepszy jest czysty \texttt{pmx}: jest
-    najlepszy lub remisuje na 19 z~20 instancji i~dorównuje lub pokonuje HLFET/MCP
-    na 19 z~nich. Dodanie CPM nie poprawia już wyniku silnego operatora PMX.
+    \item Przy uczciwym budżecie najlepszą konfiguracją jest czysty \texttt{pmx}
+    (najlepszy lub remisujący na~19 z~20 instancji); dodanie modułu CPM nie
+    poprawia już wyniku tego silnego operatora.
     \item H1 odrzucono po~wyrównaniu budżetu. Przewaga CPM widoczna przy równej
     liczbie pokoleń była artefaktem $20$--$40\times$ większego nakładu na pokolenie.
     Przy równym budżecie ewaluacji CPM istotnie \emph{szkodzi} PMX na trudnych
@@ -645,7 +678,7 @@ dysponują znacznie większym nakładem obliczeniowym.
 \paragraph{Jakość.} Przy równej liczbie pokoleń najlepszy jest \texttt{pmx\_cpm}:
 najlepszy lub remisujący na~\emph{wszystkich} 20 instancjach
 (tabela~\ref{tab:gen-main}); CPM obniża $C_{max}$ na~całym zbiorze (H1: 26 istotnych
-testów, wszystkie na~korzyść CPM, $0$ przeciw). Średnia luka do~LB wynosi $1{,}7\%$
+testów, 25 na~korzyść CPM i~$0$ przeciw, jeden przy zerowej różnicy median). Średnia luka do~LB wynosi $1{,}7\%$
 (\texttt{pmx\_cpm}), $3{,}6\%$ (\texttt{pmx}), $3{,}7\%$ (\texttt{ox\_cpm}) oraz
 $8{,}3\%$ (\texttt{ox}). Hipoteza H2 wypada tak samo jak przy równym budżecie: PMX
 pokonuje OX na~każdej nieremisowej instancji ($15$ istotnych zwycięstw, $0$ dla~OX).
