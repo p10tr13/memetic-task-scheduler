@@ -94,8 +94,8 @@ więzy pierwszeństwa i~zminimalizować czas zakończenia ostatniego zadania, cz
 \paragraph{Pojęcia harmonogramowe.}
 Ponieważ procesory są nierozróżnialne, harmonogram dopuszczalny nie zależy tylko
 od~$p$, lecz także od~tego, które zadania trafiają na ten sam procesor. Dwa
-zadania wykonywane kolejno na tym samym procesorze łączy \emph{krawędź maszynowa}
--- nie jest to więz pierwszeństwa, lecz ograniczenie zasobowe wynikające z~tego,
+zadania wykonywane kolejno na tym samym procesorze łączy \emph{krawędź maszynowa}:
+nie jest to więz pierwszeństwa, lecz ograniczenie zasobowe wynikające z~tego,
 że procesor jest zajęty. Ciąg takich krawędzi tworzy \emph{ścieżkę maszynową}.
 O~wartości $C_{max}$ może decydować zarówno ścieżka pierwszeństwa, jak i~ścieżka
 maszynowa; na~tym rozróżnieniu opiera się nasza metoda lokalna.
@@ -282,8 +282,9 @@ przeszukiwania CPM (każda próba \textit{pull-left} to ponowne dekodowanie), wi
 przy równej liczbie \emph{pokoleń} dysponowałyby wielokrotnie większym nakładem
 obliczeniowym. Aby porównanie było uczciwe~\cite{hooker1995}, wszystkie cztery
 konfiguracje prowadzimy do tego samego \emph{budżetu ewaluacji funkcji celu}
-$B = 5050$ dekodowań harmonogramu (tyle zużywa czysty AE przy populacji $50$
-i~$100$ pokoleniach: $50\times(100+1)$). Jako jednostkę budżetu liczymy każde
+$B = 5050$ dekodowań harmonogramu: $50\times(100+1)$, czyli po~jednej ocenie
+na~osobnika przez $100$ pokoleń plus populacja początkowa. Jest to ustalona,
+wspólna dla~wszystkich konfiguracji jednostka nakładu. Jako jednostkę budżetu liczymy każde
 wywołanie dekodera (ewaluacje przystosowania, próby \textit{pull-left} oraz
 dekodowania w~analizie ścieżki krytycznej), bo to ono ($O(|T|\log M)$)
 jest dominującym kosztem obu rodzin metod. Każdy przebieg zatrzymujemy na granicy
@@ -349,7 +350,7 @@ równym budżecie ewaluacji. Przy uczciwym porównaniu \emph{najlepszy jest czys
 \texttt{pmx}}: jest najlepszy lub remisuje na 19 z~20 instancji (przegrywa tylko
 o~$1$ na \texttt{syn\_t22} z~\texttt{pmx\_cpm}) oraz dorównuje lub pokonuje
 heurystyki HLFET/MCP na 19 z~20 (wyjątkiem jest \texttt{robot\_t88}, gdzie
-heurystyka $694$ bije wszystkie warianty AE). Część instancji jest wymuszona --
+heurystyka $694$ bije wszystkie warianty AE). Część instancji jest wymuszona:
 każda konfiguracja osiąga ograniczenie (np. \texttt{rand0014\_t500}: wszyscy $893$).
 
 \begin{table}[ht]
@@ -401,16 +402,17 @@ Hipoteza H1 \emph{nie potwierdza się} w~uczciwym porównaniu (tabela~\ref{tab:h
 Na 40 testach (2~operatory $\times$ 20 instancji) istotnych jest 25: CPM pomaga
 w~16, a~szkodzi w~9. Podział jest jednak wyraźnie operatorowy. Dla \emph{słabszego}
 OX CPM pomaga na~wszystkich 15 nieremisowych instancjach (0 pogorszeń), bo lokalne
-przeszukiwanie nadrabia braki eksploracji. Dla \emph{silniejszego} PMX --
+przeszukiwanie nadrabia braki eksploracji. Dla \emph{silniejszego} PMX jest
 przeciwnie: istotnie szkodzi na~9 instancjach, a~pomaga tylko raz (o~1 jednostkę na
-\texttt{syn\_t22}). Praktycznie istotne ($|\Delta|\ge 5$) jest pięć pogorszeń PMX
--- \texttt{fpppp} ($\Delta=-142$), \texttt{robot\_t88} ($-61$),
+\texttt{syn\_t22}). Praktycznie istotne ($|\Delta|\ge 5$) jest pięć pogorszeń PMX:
+\texttt{fpppp} ($\Delta=-142$), \texttt{robot\_t88} ($-61$),
 \texttt{rand0000\_t300} ($-10$), \texttt{rand0173} ($-7$), \texttt{syn\_t100\_p012}
 ($-5$); pozostałe to różnice $1$--$2$ jednostek. Zbieżność zbiorcza w~funkcji
 liczby ewaluacji (rys.~\ref{fig:convevals}) pokazuje mechanizm: przy tym samym
 budżecie czysty \texttt{pmx} schodzi najniżej, bo przeznacza wszystkie ewaluacje
-na~eksplorację wielu pokoleń, podczas gdy \texttt{pmx\_cpm} zużywa budżet
-na~intensyfikację w~niewielu pokoleniach. Krzywa \texttt{pmx} leży przy tym poniżej
+na~eksplorację wielu pokoleń, podczas gdy \texttt{pmx\_cpm} zużywa ten sam budżet
+na~intensyfikację w~zaledwie kilku pokoleniach (przy~$B$ czysty AE wykonuje
+ok.~$117$ pokoleń, a~warianty memetyczne $3$--$4$). Krzywa \texttt{pmx} leży przy tym poniżej
 pozostałych na~całym zakresie budżetu, nie tylko w~punkcie $B$, więc wniosek nie
 zależy od~konkretnej wartości budżetu.
 
@@ -736,8 +738,8 @@ w~funkcji pokolenia. \texttt{pmx\_cpm} kończy najniżej ($1{,}7\%$).}
 \centering
 \includegraphics[width=0.92\textwidth]{figures/gen/png/06_cpu_time.png}
 \caption{Protokół z~równą liczbą pokoleń: czas CPU vs liczba zadań (skala
-log--log). Warianty memetyczne są o~rzędy wielkości droższe od~czystego AE --
-konsekwencja $20$--$40\times$ większej liczby ewaluacji na~pokolenie.}
+log--log). Warianty memetyczne są o~rzędy wielkości droższe od~czystego AE,
+co wynika z~$20$--$40\times$ większej liczby ewaluacji na~pokolenie.}
 \label{fig:gen-cpu}
 \end{figure}
 
