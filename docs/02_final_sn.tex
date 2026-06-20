@@ -109,7 +109,7 @@ z~optymalizacją lokalną opartą o~analizę ścieżki krytycznej.
 Osobnik koduje kolejność wykonywania zadań: chromosomem jest permutacja
 o~długości $|T|$, zawierająca wszystkie zadania w~kolejności priorytetu
 umieszczania w~harmonogramie. Reprezentacja nie zawiera bezpośredniego przydziału
-do procesorów -- wynika on z~działania dekodera. Każda permutacja zgodna
+do procesorów; wynika on z~działania dekodera. Każda permutacja zgodna
 z~porządkiem topologicznym koduje rozwiązanie dopuszczalne.
 
 \paragraph{Dekoder (\textit{list scheduling}).}
@@ -169,20 +169,20 @@ permutacyjne unikające dublowania zadań: porównujemy krzyżowanie porządkowe
 \textit{ang. Order Crossover})~\cite{davis1985}, zachowujące względną kolejność,
 z~krzyżowaniem z~częściowym mapowaniem (PMX, \textit{ang. Partially Mapped
 Crossover})~\cite{goldberg1985}, opartym o~mieszanie pozycyjne. \emph{Mutacja} to
-operator zamiany (\textit{swap}) -- losowa zamiana miejscami dwóch zadań.
+operator zamiany (\textit{swap}): losowa zamiana miejscami dwóch zadań.
 
 \paragraph{Optymalizacja lokalna (CPM).}
-Kluczowym elementem metody memetycznej jest moduł oparty o~analizę ścieżki
+Trzonem metody memetycznej jest moduł oparty o~analizę ścieżki
 krytycznej~\cite{kelley1959} (Algorytm~\ref{alg:cpm}). W~odróżnieniu od~klasycznej
 CPM liczonej na samym grafie zależności, stosujemy analizę \emph{świadomą
 harmonogramu}: ścieżkę krytyczną wyznaczamy na faktycznie zdekodowanym
-harmonogramie, śledząc na każdym kroku poprzednika wiążącego -- z~relacji
-pierwszeństwa \emph{lub} z~zajętości procesora (krawędź maszynowa). Dzięki temu
-analiza wykrywa również wąskie gardła zasobowe. \emph{Ruchome} zadania krytyczne
--- czyli te, które mają jeszcze zapas między pozycją ostatniego poprzednika
-a~własną pozycją w~permutacji -- przesuwamy w~lewo (operacja \textit{pull-left});
-jeśli poprawia to $C_{max}$, zmiana -- zgodnie z~ewolucją
-Lamarckowską~\cite{whitley1994} -- zastępuje osobnika w~populacji.
+harmonogramie, śledząc na każdym kroku poprzednika wiążącego: z~relacji
+pierwszeństwa albo z~zajętości procesora (krawędź maszynowa). Pozwala to wykryć
+również wąskie gardła zasobowe. \emph{Ruchome} zadania krytyczne (te, które mają
+jeszcze zapas między pozycją ostatniego poprzednika a~własną pozycją
+w~permutacji) przesuwamy w~lewo (operacja \textit{pull-left}). Jeśli poprawia to
+$C_{max}$, zmiana zastępuje osobnika w~populacji zgodnie z~ewolucją
+Lamarckowską~\cite{whitley1994}.
 
 \begin{algorithm}[H]
 \caption{Lokalne przeszukiwanie CPM (pull-left zadań krytycznych)}
@@ -252,7 +252,7 @@ Luki dla różnych instancji nie są więc wprost porównywalne (raz względem o
 raz względem ograniczenia o~zmiennej szczelności); używamy ich do porównań
 \emph{w~obrębie} instancji.
 
-\paragraph{Budżet funkcji celu (kluczowe).}
+\paragraph{Budżet funkcji celu.}
 Warianty memetyczne wykonują dodatkowe ewaluacje funkcji celu wewnątrz
 przeszukiwania CPM (każda próba \textit{pull-left} to ponowne dekodowanie), więc
 przy równej liczbie \emph{pokoleń} dysponowałyby wielokrotnie większym nakładem
@@ -260,12 +260,12 @@ obliczeniowym. Aby porównanie było uczciwe~\cite{hooker1995}, wszystkie cztery
 konfiguracje prowadzimy do tego samego \emph{budżetu ewaluacji funkcji celu}
 $B = 5050$ dekodowań harmonogramu (tyle zużywa czysty AE przy populacji $50$
 i~$100$ pokoleniach: $50\times(100+1)$). Każdy przebieg zatrzymujemy na granicy
-pokolenia po~osiągnięciu~$B$. Dzięki temu wariant memetyczny wykonuje mniej
-pokoleń, ale w~przybliżeniu tyle samo ewaluacji co~AE -- różnice jakości nie
-wynikają już z~większego nakładu. Ponieważ jedno pokolenie wariantu memetycznego
-to wiele ewaluacji, warianty te nieznacznie przekraczają budżet (średnio ok.~5650
-wobec 5070 ewaluacji czystego AE) -- dostają więc \emph{nieco więcej}, a~nie mniej
-nakładu, co czyni wniosek o~przewadze czystego AE konserwatywnym. Dla porównania
+pokolenia po~osiągnięciu~$B$, więc wariant memetyczny wykonuje mniej pokoleń, ale
+w~przybliżeniu tyle samo ewaluacji co~AE, a~różnice jakości nie wynikają już
+z~większego nakładu. Ponieważ jedno pokolenie wariantu memetycznego to wiele
+ewaluacji, warianty te nieznacznie przekraczają budżet (średnio ok.~5650 wobec
+5070 ewaluacji czystego AE), dostają więc \emph{nieco więcej}, a~nie mniej
+nakładu; czyni to wniosek o~przewadze czystego AE konserwatywnym. Dla porównania
 przytaczamy też wcześniejsze wyniki przy równej liczbie pokoleń.
 
 \paragraph{Protokół statystyczny.}
@@ -275,7 +275,7 @@ Istotność różnic weryfikowano sparowanym testem kolejności rangowanej
 Wilcoxona~\cite{wilcoxon1945} (implementacja \texttt{scipy}~\cite{virtanen2020};
 te same ziarna w~obu porównywanych konfiguracjach), na~poziomie $\alpha=0{,}05$.
 Raportujemy surową p-wartość każdego testu \emph{osobno dla instancji} i~nie
-stosujemy korekcji na~wielokrotne porównania -- przy 20 instancjach pojedyncze
+stosujemy korekcji na~wielokrotne porównania; przy 20 instancjach pojedyncze
 fałszywie istotne wyniki przy $\alpha=0{,}05$ są możliwe, dlatego wnioski opieramy
 na~rozmiarze efektu i~spójnym kierunku różnic, a~nie na~pojedynczych wynikach
 istotności. Rozmiar efektu podajemy jako różnicę median $\Delta$, bo przy 15
@@ -286,8 +286,8 @@ Modified Critical Path})~\cite{wu1990} oraz czysty AE.
 
 \paragraph{Hiperparametry.}
 Bazowe parametry AE są globalne (jednakowe dla wszystkich instancji); ich wartości
-i~uzasadnienie -- zakresy ugruntowane w~literaturze GA oraz prac
-o~harmonogramowaniu~\cite{dejong1990, grefenstette1986, omara2010, hou1994} --
+i~uzasadnienie (zakresy ugruntowane w~literaturze GA oraz prac
+o~harmonogramowaniu~\cite{dejong1990, grefenstette1986, omara2010, hou1994})
 zestawia tabela~\ref{tab:hparams}. Te wartości \emph{poddajemy następnie
 strojeniu} (sekcja~\ref{sec:wyniki}).
 
@@ -378,7 +378,7 @@ przeciwnie: istotnie szkodzi na~9 instancjach, a~pomaga tylko raz (o~1 jednostk�
 \texttt{syn\_t22}). Praktycznie istotne ($|\Delta|\ge 5$) jest pięć pogorszeń PMX
 -- \texttt{fpppp} ($\Delta=-142$), \texttt{robot\_t88} ($-61$),
 \texttt{rand0000\_t300} ($-10$), \texttt{rand0173} ($-7$), \texttt{syn\_t100\_p012}
-($-5$) -- pozostałe to różnice $1$--$2$ jednostek. Zbieżność zbiorcza w~funkcji
+($-5$); pozostałe to różnice $1$--$2$ jednostek. Zbieżność zbiorcza w~funkcji
 liczby ewaluacji (rys.~\ref{fig:convevals}) pokazuje mechanizm: przy tym samym
 budżecie czysty \texttt{pmx} schodzi najniżej, bo przeznacza wszystkie ewaluacje
 na~eksplorację wielu pokoleń, podczas gdy \texttt{pmx\_cpm} zużywa budżet
@@ -437,16 +437,16 @@ eksperymentu. Przy równej liczbie pokoleń (po~$100$) warianty memetyczne wykon
 ok.~$20$--$40\times$ więcej ewaluacji na~pokolenie i~wtedy \texttt{pmx\_cpm}
 wygrywał wszędzie (np.~\texttt{fpppp} $1843$, \texttt{robot} $697$,
 \texttt{syn\_t100\_p012} $135$). Po~wyrównaniu budżetu te same instancje dają
-\texttt{pmx\_cpm} $2036$, $802$, $147$ -- gorzej niż czysty \texttt{pmx}
+\texttt{pmx\_cpm} $2036$, $802$, $147$, gorzej niż czysty \texttt{pmx}
 ($1894$, $741$, $142$). Pozorna przewaga CPM była więc artefaktem większego nakładu,
 a~nie lepszej metody.
 
 \paragraph{H2 -- OX vs PMX.}
 Hipoteza H2 również się nie potwierdza i~zachodzi relacja przeciwna, niezależnie
 od~budżetu (tabela~\ref{tab:h2}). PMX istotnie pokonuje OX na~każdej nieremisowej
-instancji: na~16 grafach rzadkich -- do~których odnosi się hipoteza -- to 14
-istotnych zwycięstw PMX, 2 remisy i~0 dla~OX; na~wszystkich 20 instancjach -- 15
-istotnych zwycięstw, 5 remisów, 0 dla~OX. Remisy występują tam, gdzie oba operatory
+instancji: na~16 grafach rzadkich (do~których odnosi się hipoteza) to 14
+istotnych zwycięstw PMX, 2 remisy i~0 dla~OX, a~na~wszystkich 20 instancjach 15
+istotnych zwycięstw, 5 remisów i~0 dla~OX. Remisy występują tam, gdzie oba operatory
 osiągają ograniczenie. Prawdopodobny mechanizm: naprawa listą gotowych
 (Algorytm~\ref{alg:repair}) już wymusza dopuszczalny porządek, więc atut OX
 w~zachowaniu kolejności jest stłumiony, podczas gdy pozycyjne mieszanie PMX
@@ -512,8 +512,8 @@ grafy gęste i~rzadkie. Czysty \texttt{pmx} jest najlepszy w~każdym podziale.}
 
 \paragraph{Koszt obliczeniowy.}
 Przy równym budżecie koszt obliczeniowy czterech konfiguracji jest zbliżony
-(rys.~\ref{fig:cpuscatter}) -- liczba dekodowań jest dominującym kosztem i~jest
-wspólna. Znika tym samym wcześniejszy obraz, w~którym warianty memetyczne były
+(rys.~\ref{fig:cpuscatter}), bo liczba dekodowań jest dominującym i~wspólnym
+kosztem. Znika tym samym wcześniejszy obraz, w~którym warianty memetyczne były
 o~rzędy wielkości droższe: tamta różnica także była konsekwencją nierównego budżetu.
 
 \begin{figure}[H]
@@ -539,10 +539,10 @@ instancji) różnica jest istotnie na~korzyść parametrów strojonych, a~w~żad
 na~korzyść bazowych (pozostałe istotne wyniki to remisy median). Największy zysk
 odnotował najsłabszy operator OX (12~istotnych poprawek), podczas gdy czysty PMX
 prawie się nie zmienił (strojenie potwierdziło, że literaturowe wartości były dla
-niego niemal optymalne). Co istotne, \emph{ranking konfiguracji się nie zmienia}:
+niego niemal optymalne). \emph{Ranking konfiguracji się nie zmienia}:
 po~strojeniu nadal najlepszy jest czysty PMX (średnia luka na~zbiorze strojeniowym
 $1{,}6\%$ wobec $1{,}9\%$ dla \texttt{pmx\_cpm}), a~strojony \texttt{pmx\_cpm}
-dobiera wręcz małą populację ($20$) i~niewiele prób CPM ($10$) -- czyli samo
+dobiera wręcz małą populację ($20$) i~niewiele prób CPM ($10$), czyli samo
 strojenie ogranicza udział lokalnego przeszukiwania.
 
 % =====================================================================
@@ -550,30 +550,29 @@ strojenie ogranicza udział lokalnego przeszukiwania.
 \label{sec:wnioski}
 % =====================================================================
 \begin{itemize}[itemsep=3pt, topsep=3pt]
-    \item \textbf{Przy uczciwym budżecie najlepszy jest czysty \texttt{pmx}.}
-    Konfiguracja ta jest najlepsza lub remisuje na 19 z~20 instancji i~dorównuje
-    lub pokonuje HLFET/MCP na 19~z~nich. Dodanie CPM nie poprawia już wyniku
-    silnego operatora PMX.
-    \item \textbf{H1 odrzucona po~wyrównaniu budżetu.} Przewaga CPM widoczna przy
-    równej liczbie pokoleń była artefaktem $20$--$40\times$ większego nakładu na
-    pokolenie. Przy równym budżecie ewaluacji CPM istotnie \emph{szkodzi} PMX na
-    trudnych grafach (wszystkie 9 istotnych pogorszeń to pary PMX), a~pomaga
-    jedynie słabszemu OX. Jest to też morał metodyczny: porównania metaheurystyk
-    należy prowadzić przy równym budżecie funkcji celu.
-    \item \textbf{H2 odrzucona w~stronę przeciwną.} Na grafach rzadkich nie
-    dominuje OX, lecz PMX (0 z~14 istotnych testów rzadkich przemawia za~OX,
-    niezależnie od~budżetu). W~tej reprezentacji i~dekoderze PMX jest
-    bezpieczniejszym wyborem operatora.
-    \item \textbf{Strojenie pomaga, ale nie zmienia wniosków.} Optymalizacja
-    hiperparametrów (Optuna, walidacja na~zbiorze niewidzianym) istotnie poprawia
-    wyniki, najbardziej dla~OX, lecz ranking pozostaje ten sam -- czysty PMX jest
+    \item Przy uczciwym budżecie najlepszy jest czysty \texttt{pmx}: jest
+    najlepszy lub remisuje na 19 z~20 instancji i~dorównuje lub pokonuje HLFET/MCP
+    na 19 z~nich. Dodanie CPM nie poprawia już wyniku silnego operatora PMX.
+    \item H1 odrzucono po~wyrównaniu budżetu. Przewaga CPM widoczna przy równej
+    liczbie pokoleń była artefaktem $20$--$40\times$ większego nakładu na pokolenie.
+    Przy równym budżecie ewaluacji CPM istotnie \emph{szkodzi} PMX na trudnych
+    grafach (wszystkie 9 istotnych pogorszeń to pary PMX), a~pomaga jedynie
+    słabszemu OX. Płynie stąd morał metodyczny: porównania metaheurystyk należy
+    prowadzić przy równym budżecie funkcji celu.
+    \item H2 odrzucono w~stronę przeciwną. Na grafach rzadkich nie dominuje OX,
+    lecz PMX (0 z~14 istotnych testów rzadkich przemawia za~OX, niezależnie
+    od~budżetu). W~tej reprezentacji i~dekoderze PMX jest bezpieczniejszym wyborem
+    operatora.
+    \item Strojenie pomaga, ale nie zmienia wniosków: optymalizacja
+    hiperparametrów (Optuna, walidacja na~zbiorze niewidzianym) najbardziej
+    poprawia wyniki OX, lecz ranking pozostaje ten sam, czyli czysty PMX jest
     najlepszy, a~strojenie samo ogranicza rolę CPM.
-    \item \textbf{Koszt jest teraz porównywalny.} Przy równym budżecie cztery
-    konfiguracje mają zbliżony czas CPU, więc o~wyborze decyduje wyłącznie jakość.
-    \item \textbf{Najtrudniejsza instancja: \texttt{robot\_t88}.} Tu nawet najlepszy
-    AE (\texttt{pmx}, mediana $741$) przegrywa z~heurystyką HLFET/MCP ($694$) --
-    metaheurystyka nie dominuje prostych heurystyk w~każdym przypadku.
-    \item \textbf{Kierunki dalszych prac.} Tańsza, budżetowana wersja lokalnego
+    \item Przy równym budżecie cztery konfiguracje mają zbliżony czas CPU, więc
+    o~wyborze decyduje wyłącznie jakość rozwiązań.
+    \item Najtrudniejszą instancją jest \texttt{robot\_t88}: nawet najlepszy AE
+    (\texttt{pmx}, mediana $741$) przegrywa tam z~heurystyką HLFET/MCP ($694$),
+    więc metaheurystyka nie dominuje prostych heurystyk w~każdym przypadku.
+    \item Kierunki dalszych prac: tańsza, budżetowana wersja lokalnego
     przeszukiwania, która nie traci na~uczciwym budżecie, oraz osobny eksperyment
     z~wyłączeniem mechanizmu naprawy w~celu weryfikacji hipotezy o~przewadze PMX.
 \end{itemize}
