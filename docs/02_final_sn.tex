@@ -49,8 +49,8 @@
 \affil[1]{\orgname{Politechnika Warszawska}, \orgaddress{\city{Warszawa}, \country{Polska}}}
 
 \abstract{Rozważamy harmonogramowanie zadań z~ograniczeniem pierwszeństwa na~$M$
-nierozróżnialnych procesorach, minimalizujące makespan~($C_{max}$) -- problem
-NP-trudny. Proponujemy algorytm memetyczny: algorytm ewolucyjny na~permutacjach
+nierozróżnialnych procesorach, minimalizujące makespan~($C_{max}$); jest to
+problem NP-trudny. Proponujemy algorytm memetyczny: algorytm ewolucyjny na~permutacjach
 priorytetów z~dekoderem listowym, wsparty lokalnym przeszukiwaniem opartym
 o~ścieżkę krytyczną liczoną na~zdekodowanym harmonogramie. Cztery konfiguracje
 (krzyżowanie OX lub~PMX, z~modułem ścieżki krytycznej i~bez) porównujemy na~20
@@ -256,7 +256,7 @@ liczniejsze właśnie na~grafach rzadkich (H2). Obie poddajemy weryfikacji empir
 
 \paragraph{Benchmarki.}
 Jako instancje posłużyły grafy ze zbioru \textit{Standard Task Graph Set}
-(Kasahara Lab)~\cite{tobita2002} oraz grafy generowane syntetycznie -- po~10
+(Kasahara Lab)~\cite{tobita2002} oraz grafy generowane syntetycznie, po~10
 z~każdego źródła, o~rozmiarach od~kilkunastu do~ponad 500 zadań. Generator
 syntetyczny tworzy losowy DAG: $n$ zadań o~czasach z~rozkładu jednostajnego
 $[1,10]$, krawędzie losowane spośród par $(i,j)$ z~$i<j$ (co gwarantuje
@@ -284,8 +284,8 @@ obliczeniowym. Aby porównanie było uczciwe~\cite{hooker1995}, wszystkie cztery
 konfiguracje prowadzimy do tego samego \emph{budżetu ewaluacji funkcji celu}
 $B = 5050$ dekodowań harmonogramu (tyle zużywa czysty AE przy populacji $50$
 i~$100$ pokoleniach: $50\times(100+1)$). Jako jednostkę budżetu liczymy każde
-wywołanie dekodera -- ewaluacje przystosowania, próby \textit{pull-left} oraz
-dekodowania w~analizie ścieżki krytycznej -- bo to dekodowanie ($O(|T|\log M)$)
+wywołanie dekodera (ewaluacje przystosowania, próby \textit{pull-left} oraz
+dekodowania w~analizie ścieżki krytycznej), bo to ono ($O(|T|\log M)$)
 jest dominującym kosztem obu rodzin metod. Każdy przebieg zatrzymujemy na granicy
 pokolenia po~osiągnięciu~$B$, więc wariant memetyczny wykonuje mniej pokoleń, ale
 w~przybliżeniu tyle samo dekodowań co~AE, a~różnice jakości nie wynikają już
@@ -570,15 +570,15 @@ osobno narzędziem Optuna~\cite{akiba2019} (sampler TPE, \textit{ang.
 Tree-structured Parzen Estimator}). Przeszukiwane zakresy zestawia
 tabela~\ref{tab:tune} (kolumna „zakres''): prawdopodobieństwo krzyżowania
 $p_c\in[0{,}6;\,0{,}95]$, prawdopodobieństwo mutacji $p_m\in[0{,}05;\,0{,}5]$,
-populacja $\in\{20,30,\dots,100\}$, rozmiar turnieju $\in[2;\,7]$ oraz -- tylko dla
-wariantów memetycznych -- liczba prób CPM na~osobnika $\in[5;\,60]$. Każda
+populacja $\in\{20,30,\dots,100\}$, rozmiar turnieju $\in[2;\,7]$ oraz (tylko dla
+wariantów memetycznych) liczba prób CPM na~osobnika $\in[5;\,60]$. Każda
 konfiguracja przeszła 160 prób.
 
 \paragraph{Protokół z~wydzieleniem zbioru.} Funkcją celu strojenia jest średnia
 luka do~LB na~\emph{zbiorze strojeniowym} 6 instancji (\texttt{syn\_t15},
 \texttt{syn\_t30}, \texttt{syn\_t40\_p035}, \texttt{syn\_t60\_p015},
 \texttt{rand0000\_t50}, \texttt{rand0173\_t100}), uśredniona po~3 ziarnach, liczona
-przy \emph{tym samym budżecie} $B=5050$, co reszta pracy -- strojenie jest więc tak
+przy \emph{tym samym budżecie} $B=5050$, co reszta pracy; strojenie jest więc tak
 samo budżetowo uczciwe. Aby uniknąć przeuczenia, strojone parametry porównujemy
 z~bazowymi wyłącznie na~14 pozostałych, \emph{niewidzianych} instancjach
 walidacyjnych, przy pełnych 15 ziarnach (jak w~głównej kampanii); różnice testujemy
@@ -613,10 +613,10 @@ a~w~żadnym na~korzyść bazowych (pozostałe istotne wyniki to remisy median). 
 jest jednak nierówny i~pouczający (tabela~\ref{tab:tune}). Najsłabszy operator OX
 poprawia się najbardziej (12 istotnych poprawek): strojenie odsuwa go od~literatury
 najdalej, dobierając dużą populację ($100$) i~wysoką mutację ($0{,}50$). Czysty PMX
-przeciwnie -- jego strojone wartości ($p_c=0{,}82$, $p_m=0{,}42$, populacja $60$)
+zachowuje się przeciwnie: jego strojone wartości ($p_c=0{,}82$, $p_m=0{,}42$, populacja $60$)
 leżą blisko wartości literaturowych, co potwierdza, że były one dla~niego niemal
-optymalne. Warianty memetyczne dobierają natomiast małe populacje ($40$ i~$20$)
-oraz -- w~przypadku \texttt{pmx\_cpm} -- bardzo niewiele prób CPM ($10$ zamiast
+optymalne. Warianty dobierają natomiast małe populacje ($40$ i~$20$)
+oraz (w~przypadku \texttt{pmx\_cpm}) bardzo niewiele prób CPM ($10$ zamiast
 $20$): samo strojenie ogranicza udział lokalnego przeszukiwania. Ranking
 konfiguracji pozostaje ten sam: także po~strojeniu najlepszy jest czysty PMX
 (średnia luka na~zbiorze strojeniowym $1{,}6\%$ wobec $1{,}9\%$ dla
